@@ -3,28 +3,27 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useAccount, useChainId, useWaitForTransactionReceipt } from "wagmi"
 import { ConnectButton } from "@rainbow-me/rainbowkit"
-import { ArrowDownUp, RefreshCw, Settings } from "lucide-react"
+import {
+  ArrowDown, ChevronDown, ChevronLeft, Copy, Check,
+  Search, Settings, Star, X, AlertTriangle,
+} from "lucide-react"
 import { toast } from "sonner"
 import { TokenSelector } from "@terminal/components/TokenSelector"
-import { SwapDetails } from "@terminal/components/SwapDetails"
 import { TokenIcon } from "@terminal/components/ui/token-icon"
-import { Button } from "@terminal/components/ui/button"
 import { useSwapQuote } from "@terminal/hooks/useSwapQuote"
 import { useSwap } from "@terminal/hooks/useSwap"
 import { useTokenApproval } from "@terminal/hooks/useTokenApproval"
 import { useWrapUnwrap } from "@terminal/hooks/useWrapUnwrap"
 import { useTokenBalance } from "@terminal/hooks/useTokenBalance"
 import {
-  getTokenList,
-  getSDKToken,
-  getSDKTokens,
-  toSDKChainId,
-  PHAROS_CHAIN_ID,
-  type TokenConfig,
+  getTokenList, getSDKToken, getSDKTokens,
+  PHAROS_CHAIN_ID, type TokenConfig,
 } from "@terminal/config/tokens"
 import { isWrapOrUnwrap, isWrapOperation } from "@terminal/utils/swap"
 import { sanitizeAmount, formatAmount } from "@terminal/utils/format"
 import { cn } from "@terminal/utils/cn"
+
+type View = "swap" | "select-from" | "select-to" | "settings"
 
 export interface SwapWidgetConfig {
   defaultFromToken?: string
@@ -33,6 +32,290 @@ export interface SwapWidgetConfig {
   onSwapSuccess?: (txHash: string) => void
   className?: string
 }
+
+const SLIPPAGE_PRESETS = [10, 50, 100] // bps
+
+// ── CircularTimer ─────────────────────────────────────────────────────────────
+
+function CircularTimer({ seconds, max = 10, size = 18, isLoading, onClick }: {
+  seconds: number; max?: number; size?: number; isLoading?: boolean; onClick?: () => void
+}) {
+  const r = (size - 3) / 2
+  const circ = 2 * Math.PI * r
+  const offset = isLoading ? 0 : circ * (1 - seconds / max)
+  return (
+    <button type="button" onClick={onClick} title="Refresh quote"
+      className="relative flex items-center justify-center hover:opacity-70 transition-opacity"
+      style={{ width: size, height: size }}>
+      <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }} className="absolute">
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="var(--zt-text-10)" strokeWidth="2" />
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="var(--zt-primary)" strokeWidth="2"
+          strokeLinecap="round" strokeDasharray={circ} strokeDashoffset={offset}
+          style={isLoading ? undefined : { transition: "stroke-dashoffset 1s linear" }}
+          className={isLoading ? "animate-spin" : undefined} />
+      </svg>
+      {!isLoading && (
+        <span style={{ fontSize: size * 0.38, color: "var(--zt-text-50)", fontVariantNumeric: "tabular-nums" }}>
+          {seconds}
+        </span>
+      )}
+    </button>
+  )
+}
+
+// ── Token list panel ──────────────────────────────────────────────────────────
+
+function TokenListPanel({ tokens, disabledAddress, onSelect, onBack }: {
+  tokens: TokenConfig[]
+  disabledAddress?: string
+  onSelect: (t: TokenConfig) => void
+  onBack: () => void
+}) {
+  const [search, setSearch] = useState("")
+  const [tab, setTab] = useState<"default" | "imported">("default")
+  const [copied, setCopied] = useState<string | null>(null)
+  const [favorites, setFavorites] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem("zt-fav-tokens") ?? "[]") } catch { return [] }
+  })
+
+  useEffect(() => {
+    localStorage.setItem("zt-fav-tokens", JSON.stringify(favorites))
+  }, [favorites])
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase()
+    return tokens.filter(t =>
+      t.symbol.toLowerCase().includes(q) ||
+      t.name.toLowerCase().includes(q) ||
+      t.address.toLowerCase().includes(q)
+    )
+  }, [tokens, search])
+
+  const isFav = (addr: string) => favorites.includes(addr.toLowerCase())
+  const toggleFav = (addr: string) => setFavorites(prev =>
+    isFav(addr) ? prev.filter(a => a !== addr.toLowerCase()) : [...prev, addr.toLowerCase()]
+  )
+
+  const handleCopy = (addr: string) => {
+    navigator.clipboard.writeText(addr).then(() => {
+      setCopied(addr)
+      setTimeout(() => setCopied(null), 1500)
+    })
+  }
+
+  const formatAddr = (addr: string) =>
+    addr === "NATIVE" ? "Native" : `${addr.slice(0, 6)}...${addr.slice(-4)}`
+
+  return (
+    <div className="flex flex-col h-full" style={{ color: "var(--zt-text)" }}>
+      {/* Header */}
+      <div className="flex items-center gap-2 mb-4">
+        <button type="button" onClick={onBack}
+          className="flex items-center gap-1 text-sm transition-opacity hover:opacity-70"
+          style={{ color: "var(--zt-text-60)" }}>
+          <ChevronLeft className="w-4 h-4" />
+          <span>Back</span>
+        </button>
+        <span className="flex-1 text-center font-semibold text-sm" style={{ color: "var(--zt-text)" }}>
+          Select Token
+        </span>
+        {/* spacer to balance */}
+        <div className="w-12" />
+      </div>
+
+      {/* Search */}
+      <div className="flex items-center gap-2 rounded-xl px-3 py-2.5 mb-3"
+        style={{ background: "var(--zt-text-8)", border: "1px solid var(--zt-border)" }}>
+        <Search className="w-4 h-4 shrink-0" style={{ color: "var(--zt-text-40)" }} />
+        <input
+          autoFocus
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search by token or address"
+          className="bg-transparent text-sm outline-none w-full"
+          style={{ color: "var(--zt-text)" }}
+        />
+        {search && (
+          <button onClick={() => setSearch("")} style={{ color: "var(--zt-text-40)" }}>
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-4 mb-2 border-b" style={{ borderColor: "var(--zt-border)" }}>
+        {(["default", "imported"] as const).map(t => (
+          <button key={t} type="button" onClick={() => setTab(t)}
+            className="pb-2 text-sm font-medium capitalize transition-colors relative"
+            style={{ color: tab === t ? "var(--zt-text)" : "var(--zt-text-40)" }}>
+            {t.charAt(0).toUpperCase() + t.slice(1)}
+            {tab === t && (
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full"
+                style={{ background: "var(--zt-primary)" }} />
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Token list */}
+      <div className="flex-1 overflow-y-auto -mx-1 px-1">
+        {filtered.length === 0 ? (
+          <p className="text-center py-10 text-sm" style={{ color: "var(--zt-text-40)" }}>
+            No tokens found
+          </p>
+        ) : (
+          filtered.map(token => {
+            const disabled = token.address.toLowerCase() === disabledAddress?.toLowerCase()
+            const fav = isFav(token.address)
+            return (
+              <div key={token.address}
+                className={cn(
+                  "flex items-center gap-3 rounded-xl px-2 py-2.5 transition-colors",
+                  disabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer"
+                )}
+                style={{ background: "transparent" }}
+                onMouseEnter={e => !disabled && ((e.currentTarget as HTMLDivElement).style.background = "var(--zt-text-5)")}
+                onMouseLeave={e => ((e.currentTarget as HTMLDivElement).style.background = "transparent")}
+                onClick={() => { if (!disabled) { onSelect(token); onBack() } }}
+              >
+                {/* Icon */}
+                <TokenIcon src={token.icon} symbol={token.symbol} size={36} />
+
+                {/* Name/address */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold text-sm" style={{ color: "var(--zt-text)" }}>
+                      {token.symbol}
+                    </span>
+                    {/* verified dot for non-imported */}
+                    <span className="w-3.5 h-3.5 rounded-full flex items-center justify-center"
+                      style={{ background: "var(--zt-primary)" }}>
+                      <Check className="w-2 h-2" style={{ color: "var(--zt-btn-text)" }} />
+                    </span>
+                  </div>
+                  <div className="text-xs mt-0.5" style={{ color: "var(--zt-text-50)" }}>{token.name}</div>
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <span className="text-[11px] font-mono" style={{ color: "var(--zt-text-40)" }}>
+                      {formatAddr(token.address)}
+                    </span>
+                    {token.address !== "NATIVE" && (
+                      <button type="button"
+                        onClick={e => { e.stopPropagation(); handleCopy(token.address) }}
+                        className="transition-opacity hover:opacity-70"
+                        style={{ color: "var(--zt-text-40)" }}>
+                        {copied === token.address
+                          ? <Check className="w-3 h-3" style={{ color: "var(--zt-success)" }} />
+                          : <Copy className="w-3 h-3" />
+                        }
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Favorite star */}
+                <button type="button"
+                  onClick={e => { e.stopPropagation(); toggleFav(token.address) }}
+                  className="shrink-0 transition-colors hover:opacity-80 p-1"
+                  style={{ color: fav ? "var(--zt-primary)" : "var(--zt-text-30)" }}>
+                  <Star className={cn("w-4 h-4", fav && "fill-current")} />
+                </button>
+              </div>
+            )
+          })
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Settings panel ────────────────────────────────────────────────────────────
+
+function SettingsPanel({ slippageBps, onSave, onClose }: {
+  slippageBps: number
+  onSave: (bps: number) => void
+  onClose: () => void
+}) {
+  const [localBps, setLocalBps] = useState(slippageBps)
+  const [custom, setCustom] = useState("")
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <span className="font-semibold text-base" style={{ color: "var(--zt-text)" }}>Settings</span>
+        <button type="button" onClick={onClose}
+          className="transition-opacity hover:opacity-70"
+          style={{ color: "var(--zt-text-50)" }}>
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+
+      {/* Slippage */}
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center gap-2">
+          <Settings className="w-4 h-4" style={{ color: "var(--zt-text-60)" }} />
+          <span className="text-sm font-medium" style={{ color: "var(--zt-text-70)" }}>
+            Slippage Tolerance
+          </span>
+        </div>
+        <div className="flex gap-2">
+          {SLIPPAGE_PRESETS.map(bps => {
+            const active = localBps === bps && !custom
+            return (
+              <button key={bps} type="button"
+                onClick={() => { setLocalBps(bps); setCustom("") }}
+                className="flex-1 py-2 rounded-xl text-sm font-semibold transition-all"
+                style={active
+                  ? { background: "var(--zt-primary)", color: "var(--zt-btn-text)" }
+                  : { background: "var(--zt-text-8)", color: "var(--zt-text-50)", border: "1px solid var(--zt-border)" }
+                }>
+                {bps / 100}%
+              </button>
+            )
+          })}
+          {/* Custom */}
+          <div className="flex-1 flex items-center gap-1 rounded-xl px-2 py-1.5 transition-all"
+            style={custom
+              ? { background: "var(--zt-primary-10)", border: "1px solid var(--zt-primary-40)" }
+              : { background: "var(--zt-text-8)", border: "1px solid var(--zt-border)" }
+            }>
+            <input
+              type="number" min="0.01" max="50" step="0.1"
+              value={custom}
+              onChange={e => {
+                setCustom(e.target.value)
+                const n = parseFloat(e.target.value)
+                if (!isNaN(n) && n > 0 && n <= 50) setLocalBps(Math.round(n * 100))
+              }}
+              placeholder="Custom"
+              className="bg-transparent text-xs w-full outline-none"
+              style={{ color: "var(--zt-text)" }}
+            />
+            <span className="text-xs shrink-0" style={{ color: "var(--zt-text-40)" }}>%</span>
+          </div>
+        </div>
+        {localBps > 200 && (
+          <p className="text-xs flex items-center gap-1.5" style={{ color: "var(--zt-warning)" }}>
+            <AlertTriangle className="w-3.5 h-3.5" />
+            High slippage — your trade may be frontrun
+          </p>
+        )}
+      </div>
+
+      <div className="h-px" style={{ background: "var(--zt-border)" }} />
+
+      {/* Save */}
+      <button type="button"
+        onClick={() => { onSave(localBps); onClose() }}
+        className="w-full py-3 rounded-xl font-semibold text-sm transition-all hover:opacity-90"
+        style={{ background: "var(--zt-primary)", color: "var(--zt-btn-text)" }}>
+        Save
+      </button>
+    </div>
+  )
+}
+
+// ── SwapWidget ────────────────────────────────────────────────────────────────
 
 export function SwapWidget({
   defaultFromToken = "NATIVE",
@@ -44,133 +327,87 @@ export function SwapWidget({
   const wagmiChainId = useChainId()
   const chainId = wagmiChainId ?? PHAROS_CHAIN_ID
   const { address, isConnected } = useAccount()
+  const [view, setView] = useState<View>("swap")
 
   const tokenList = useMemo(() => getTokenList(chainId), [chainId])
 
-  // Token state
   const [fromToken, setFromToken] = useState<TokenConfig | null>(
-    () => tokenList.find((t) => t.address.toLowerCase() === defaultFromToken.toLowerCase()) ?? tokenList[0] ?? null
+    () => tokenList.find(t => t.address.toLowerCase() === defaultFromToken.toLowerCase()) ?? tokenList[0] ?? null
   )
   const [toToken, setToToken] = useState<TokenConfig | null>(
-    () => tokenList.find((t) => t.address.toLowerCase() === defaultToToken.toLowerCase()) ?? tokenList[1] ?? null
+    () => tokenList.find(t => t.address.toLowerCase() === defaultToToken.toLowerCase()) ?? tokenList[1] ?? null
   )
   const [fromAmount, setFromAmount] = useState("")
   const [toAmount, setToAmount] = useState("")
   const [slippageBps, setSlippageBps] = useState(defaultSlippageBps)
-  const [showSettings, setShowSettings] = useState(false)
   const [refreshCounter, setRefreshCounter] = useState(0)
+  const [countdown, setCountdown] = useState(10)
   const [lastProcessedHash, setLastProcessedHash] = useState<string | null>(null)
+  const [lastProcessedWrapHash, setLastProcessedWrapHash] = useState<string | null>(null)
+  const [isFlipping, setIsFlipping] = useState(false)
 
-  // Debounced amount for quote
-  const [debouncedFromAmount, setDebouncedFromAmount] = useState("")
+  // Debounce
+  const [debouncedAmount, setDebouncedAmount] = useState("")
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedFromAmount(fromAmount), 400)
+    const t = setTimeout(() => setDebouncedAmount(fromAmount), 400)
     return () => clearTimeout(t)
   }, [fromAmount])
 
-  // SDK tokens (memoized to prevent infinite re-renders)
   const sdkTokens = useMemo(() => getSDKTokens(chainId), [chainId])
   const bases = useMemo(() => Object.values(sdkTokens), [sdkTokens])
-
-  const isWrapUnwrap = fromToken && toToken ? isWrapOrUnwrap(fromToken, toToken) : false
+  const isWrapUnwrap = useMemo(() => fromToken && toToken ? isWrapOrUnwrap(fromToken, toToken) : false, [fromToken, toToken])
   const isFromNative = fromToken?.address === "NATIVE"
   const isToNative = toToken?.address === "NATIVE"
+  const sdkFrom = useMemo(() => fromToken ? getSDKToken(fromToken.address, chainId) ?? null : null, [fromToken, chainId])
+  const sdkTo = useMemo(() => toToken ? getSDKToken(toToken.address, chainId) ?? null : null, [toToken, chainId])
 
-  const sdkFromToken = useMemo(
-    () => (fromToken ? getSDKToken(fromToken.address, chainId) ?? null : null),
-    [fromToken, chainId]
-  )
-  const sdkToToken = useMemo(
-    () => (toToken ? getSDKToken(toToken.address, chainId) ?? null : null),
-    [toToken, chainId]
-  )
+  const { balance: fromBalance, refetch: refetchFrom } = useTokenBalance({ tokenAddress: fromToken?.address ?? null, userAddress: address, decimals: fromToken?.decimals ?? 18, chainId })
+  const { balance: toBalance, refetch: refetchTo } = useTokenBalance({ tokenAddress: toToken?.address ?? null, userAddress: address, decimals: toToken?.decimals ?? 18, chainId })
 
-  // Balances
-  const { balance: fromBalance, refetch: refetchFromBalance } = useTokenBalance({
-    tokenAddress: fromToken?.address ?? null,
-    userAddress: address,
-    decimals: fromToken?.decimals ?? 18,
-    chainId,
-  })
-  const { balance: toBalance, refetch: refetchToBalance } = useTokenBalance({
-    tokenAddress: toToken?.address ?? null,
-    userAddress: address,
-    decimals: toToken?.decimals ?? 18,
-    chainId,
+  const { trade, outputAmount, executionPrice, priceImpact, tradingFee, isLoading: quoteLoading, error: quoteError } = useSwapQuote({
+    inputToken: sdkFrom, outputToken: sdkTo, typedValue: debouncedAmount,
+    isExactIn: true, isNativeIn: isFromNative, isNativeOut: isToNative,
+    bases, chainId, enabled: !isWrapUnwrap && !!debouncedAmount && parseFloat(debouncedAmount) > 0, refreshCounter,
   })
 
-  // Quote
-  const { trade, outputAmount, executionPrice, priceImpact, tradingFee, isLoading: isQuoteLoading, error: quoteError } =
-    useSwapQuote({
-      inputToken: sdkFromToken,
-      outputToken: sdkToToken,
-      typedValue: debouncedFromAmount,
-      isExactIn: true,
-      isNativeIn: isFromNative,
-      isNativeOut: isToNative,
-      bases,
-      chainId,
-      enabled: !isWrapUnwrap && !!debouncedFromAmount && parseFloat(debouncedFromAmount) > 0,
-      refreshCounter,
-    })
+  useEffect(() => { setToAmount(isWrapUnwrap ? fromAmount : outputAmount) }, [outputAmount, isWrapUnwrap, fromAmount])
 
-  // Update toAmount from quote
-  useEffect(() => {
-    if (isWrapUnwrap) {
-      setToAmount(fromAmount)
-    } else {
-      setToAmount(outputAmount)
-    }
-  }, [outputAmount, isWrapUnwrap, fromAmount])
+  const { needsApproval, isCheckingApproval, isApproving, isApprovalPending, approve } = useTokenApproval({
+    tokenAddress: isFromNative ? null : (fromToken?.address ?? null),
+    amount: fromAmount, tokenDecimals: fromToken?.decimals ?? 18, chainId,
+    enabled: !isWrapUnwrap && isConnected && !!fromAmount && parseFloat(fromAmount) > 0,
+  })
 
-  // Approval
-  const { needsApproval, isCheckingApproval, isApproving, isApprovalPending, isApprovalConfirmed, approvalHash, approve } =
-    useTokenApproval({
-      tokenAddress: isFromNative ? null : (fromToken?.address ?? null),
-      amount: fromAmount,
-      tokenDecimals: fromToken?.decimals ?? 18,
-      chainId,
-      enabled: !isWrapUnwrap && !!fromAmount && parseFloat(fromAmount) > 0,
-    })
-
-  // Swap execution
   const { executeSwap, isSwapping, hash: swapHash } = useSwap(chainId)
-  const { isSuccess: isSwapConfirmed } = useWaitForTransactionReceipt({
-    hash: swapHash ?? undefined,
-  })
-
-  // Wrap/unwrap
+  const { isSuccess: isSwapConfirmed } = useWaitForTransactionReceipt({ hash: swapHash ?? undefined })
   const { wrap, unwrap, isPending: isWrapPending, isConfirmed: isWrapConfirmed, hash: wrapHash } = useWrapUnwrap()
-  const [lastProcessedWrapHash, setLastProcessedWrapHash] = useState<string | null>(null)
 
-  // Auto-refresh timer (10s)
+  // Countdown timer
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   useEffect(() => {
-    if (!isWrapUnwrap && debouncedFromAmount && parseFloat(debouncedFromAmount) > 0) {
-      timerRef.current = setInterval(() => setRefreshCounter((c) => c + 1), 10_000)
+    if (timerRef.current) clearInterval(timerRef.current)
+    if (!isWrapUnwrap && debouncedAmount && parseFloat(debouncedAmount) > 0) {
+      setCountdown(10)
+      timerRef.current = setInterval(() => {
+        setCountdown(c => { if (c <= 1) { setRefreshCounter(r => r + 1); return 10 } return c - 1 })
+      }, 1000)
     }
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current)
-    }
-  }, [isWrapUnwrap, debouncedFromAmount])
+    return () => { if (timerRef.current) clearInterval(timerRef.current) }
+  }, [isWrapUnwrap, debouncedAmount])
 
-  // Swap success toast
+  // Swap confirmed
   useEffect(() => {
     if (isSwapConfirmed && swapHash && swapHash !== lastProcessedHash) {
-      const captured = { from: fromAmount, to: toAmount, fromSym: fromToken?.symbol, toSym: toToken?.symbol }
+      const snap = { from: fromAmount, to: toAmount, fromSym: fromToken?.symbol, toSym: toToken?.symbol }
       setLastProcessedHash(swapHash)
-      toast.success("Swap Successful!", {
-        description: `${captured.from} ${captured.fromSym} → ${captured.to} ${captured.toSym}`,
-      })
-      setFromAmount("")
-      setToAmount("")
-      refetchFromBalance()
-      refetchToBalance()
+      toast.success("Swap Successful!", { description: `${snap.from} ${snap.fromSym} → ${snap.to} ${snap.toSym}` })
+      setFromAmount(""); setToAmount("")
+      refetchFrom(); refetchTo()
       onSwapSuccess?.(swapHash)
     }
-  }, [isSwapConfirmed, swapHash, lastProcessedHash])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSwapConfirmed, swapHash])
 
-  // Wrap/unwrap success toast
   useEffect(() => {
     if (isWrapConfirmed && wrapHash && wrapHash !== lastProcessedWrapHash) {
       const isWrap = fromToken && toToken ? isWrapOperation(fromToken, toToken) : true
@@ -178,281 +415,358 @@ export function SwapWidget({
       toast.success(isWrap ? "Wrap Successful!" : "Unwrap Successful!", {
         description: `${fromAmount} ${fromToken?.symbol} → ${toAmount} ${toToken?.symbol}`,
       })
-      setFromAmount("")
-      setToAmount("")
-      refetchFromBalance()
-      refetchToBalance()
+      setFromAmount(""); setToAmount("")
+      refetchFrom(); refetchTo()
       onSwapSuccess?.(wrapHash)
     }
-  }, [isWrapConfirmed, wrapHash, lastProcessedWrapHash])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isWrapConfirmed, wrapHash])
 
-  // Validation
-  const fromAmountNum = parseFloat(fromAmount)
-  const fromBalanceNum = parseFloat(fromBalance)
-  const hasInsufficientBalance = isConnected && fromAmount && fromAmountNum > fromBalanceNum
+  // Derived
+  const fromAmountNum = parseFloat(fromAmount) || 0
+  const fromBalanceNum = parseFloat(fromBalance) || 0
+  const hasInsufficientBalance = isConnected && fromAmountNum > 0 && fromAmountNum > fromBalanceNum
   const hasNoPool = quoteError?.message?.includes("No liquidity")
   const hasInsufficientLiquidity = quoteError?.message?.includes("Insufficient liquidity")
-
-  const isLoading = isQuoteLoading || isCheckingApproval || isApproving || isApprovalPending || isSwapping || isWrapPending
-
-  const canSwap =
-    isConnected &&
-    !!fromToken &&
-    !!toToken &&
-    !!fromAmount &&
-    fromAmountNum > 0 &&
-    !hasInsufficientBalance &&
-    !hasNoPool &&
-    !hasInsufficientLiquidity &&
-    !isLoading &&
-    (isWrapUnwrap || !!trade)
+  const priceImpactNum = parseFloat(priceImpact) || 0
+  const isHighImpact = priceImpactNum >= 5
+  const isLoading = quoteLoading || isCheckingApproval || isApproving || isApprovalPending || isSwapping || isWrapPending
+  const canSwap = isConnected && !!fromToken && !!toToken && fromAmountNum > 0 &&
+    !hasInsufficientBalance && !hasNoPool && !hasInsufficientLiquidity &&
+    !isLoading && (isWrapUnwrap || !!trade)
+  const minimumReceived = toAmount && !isWrapUnwrap
+    ? (parseFloat(toAmount) * (1 - slippageBps / 10000)).toFixed(6) : toAmount
 
   const buttonLabel = useMemo(() => {
     if (!isConnected) return "Connect Wallet"
-    if (!fromAmount || fromAmountNum <= 0) return "Enter Amount"
-    if (hasInsufficientBalance) return `Insufficient ${fromToken?.symbol} Balance`
-    if (hasNoPool) return "No Liquidity Pool"
+    if (!fromAmount || fromAmountNum <= 0) return "Enter an Amount"
+    if (hasInsufficientBalance) return `Insufficient ${fromToken?.symbol}`
+    if (hasNoPool) return "No Pool Found"
     if (hasInsufficientLiquidity) return "Insufficient Liquidity"
     if (isApproving) return "Approving..."
-    if (isApprovalPending) return "Waiting for Approval..."
+    if (isApprovalPending) return "Waiting..."
     if (needsApproval) return `Approve ${fromToken?.symbol}`
     if (isSwapping || isWrapPending) return "Confirming..."
-    if (isQuoteLoading) return "Fetching Quote..."
+    if (quoteLoading) return "Getting Quote..."
     if (isWrapUnwrap) return fromToken?.symbol === "PHRS" ? "Wrap" : "Unwrap"
-    return "Swap"
-  }, [isConnected, fromAmount, fromAmountNum, hasInsufficientBalance, hasNoPool, hasInsufficientLiquidity, isApproving, isApprovalPending, needsApproval, isSwapping, isWrapPending, isQuoteLoading, isWrapUnwrap, fromToken])
+    return isHighImpact ? "Swap Anyway" : "Swap"
+  }, [isConnected, fromAmount, fromAmountNum, hasInsufficientBalance, hasNoPool, hasInsufficientLiquidity,
+      isApproving, isApprovalPending, needsApproval, isSwapping, isWrapPending, quoteLoading, isWrapUnwrap,
+      fromToken, isHighImpact])
 
   const handleSwap = async () => {
-    if (!canSwap) return
+    if (!isConnected || !fromToken || !toToken) return
     try {
       if (needsApproval) {
-        toast.info("Approve Token", { description: "Please approve token spending in your wallet" })
-        await approve()
-        toast.success("Approval Successful!")
-        return
+        toast.info(`Approve ${fromToken.symbol}`, { description: "Approve token spending in your wallet" })
+        await approve(); toast.success("Approval Successful!"); return
       }
-
       if (isWrapUnwrap) {
         toast.info("Confirm Transaction", { description: "Please confirm in your wallet" })
-        if (fromToken?.symbol === "PHRS") {
-          await wrap(fromAmount)
-        } else {
-          await unwrap(fromAmount)
-        }
-        return
+        fromToken.symbol === "PHRS" ? await wrap(fromAmount) : await unwrap(fromAmount); return
       }
-
       if (!trade) return
-      toast.info("Confirm Swap", { description: "Please confirm the swap in your wallet" })
+      toast.info("Confirm Swap", { description: "Please confirm in your wallet" })
       await executeSwap(trade, { slippageBps })
       toast.info("Transaction Submitted", { description: "Waiting for confirmation..." })
     } catch (err: unknown) {
       const msg = (err as Error)?.message ?? ""
-      if (msg.includes("User rejected") || msg.includes("user rejected")) {
+      if (msg.toLowerCase().includes("user rejected") || msg.toLowerCase().includes("denied"))
         toast.error("Transaction Rejected")
-      } else if (msg.includes("insufficient funds")) {
+      else if (msg.includes("insufficient funds"))
         toast.error("Insufficient Funds")
-      } else {
+      else
         toast.error("Transaction Failed", { description: msg.slice(0, 120) })
-      }
     }
   }
 
-  const handleSwitch = () => {
-    const prev = fromToken
-    setFromToken(toToken)
-    setToToken(prev)
-    setFromAmount(toAmount)
-    setToAmount(fromAmount)
+  const handleFlip = () => {
+    setIsFlipping(true)
+    setTimeout(() => setIsFlipping(false), 300)
+    const prev = fromToken; setFromToken(toToken); setToToken(prev)
+    setFromAmount(toAmount); setToAmount("")
   }
+
+  const handleFromSelect = useCallback((t: TokenConfig) => {
+    if (t.address === toToken?.address) setToToken(fromToken)
+    setFromToken(t); setFromAmount(""); setView("swap")
+  }, [fromToken, toToken])
+
+  const handleToSelect = useCallback((t: TokenConfig) => {
+    if (t.address === fromToken?.address) setFromToken(toToken)
+    setToToken(t); setView("swap")
+  }, [fromToken, toToken])
 
   const setPercentage = (pct: number) => {
-    if (!fromBalance) return
-    const value = (fromBalanceNum * pct).toFixed(fromToken?.decimals ?? 6)
-    setFromAmount(sanitizeAmount(value))
+    if (!fromBalance || fromBalanceNum <= 0) return
+    setFromAmount(sanitizeAmount((fromBalanceNum * pct).toFixed(fromToken?.decimals ?? 6)))
   }
 
+  const showTimer = !isWrapUnwrap && !!debouncedAmount && parseFloat(debouncedAmount) > 0
+
+  // ── Token selection panel ─────────────────────────────────────────────
+  if (view === "select-from" || view === "select-to") {
+    return (
+      <div className={cn("flex flex-col w-full min-h-[420px]", className)}>
+        <TokenListPanel
+          tokens={tokenList}
+          disabledAddress={view === "select-from" ? toToken?.address : fromToken?.address}
+          onSelect={view === "select-from" ? handleFromSelect : handleToSelect}
+          onBack={() => setView("swap")}
+        />
+      </div>
+    )
+  }
+
+  // ── Settings panel ────────────────────────────────────────────────────
+  if (view === "settings") {
+    return (
+      <div className={cn("flex flex-col w-full", className)}>
+        <SettingsPanel
+          slippageBps={slippageBps}
+          onSave={setSlippageBps}
+          onClose={() => setView("swap")}
+        />
+      </div>
+    )
+  }
+
+  // ── Main swap UI ──────────────────────────────────────────────────────
   return (
     <div className={cn("flex flex-col gap-3 w-full", className)}>
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <span className="text-white/70 text-sm font-medium">Swap</span>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setRefreshCounter((c) => c + 1)}
-            className="text-white/40 hover:text-white/70 transition-colors"
-            title="Refresh quote"
-          >
-            <RefreshCw className={cn("w-4 h-4", isQuoteLoading && "animate-spin")} />
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowSettings(!showSettings)}
-            className="text-white/40 hover:text-white/70 transition-colors"
-            title="Settings"
-          >
-            <Settings className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
 
-      {/* Settings panel */}
-      {showSettings && (
-        <div className="rounded-xl border border-white/10 bg-white/5 p-3 flex flex-col gap-2">
-          <span className="text-white/60 text-xs">Slippage Tolerance</span>
-          <div className="flex items-center gap-2">
-            {[10, 30, 50, 100].map((bps) => (
-              <button
-                key={bps}
-                type="button"
-                onClick={() => setSlippageBps(bps)}
-                className={cn(
-                  "px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
-                  slippageBps === bps
-                    ? "bg-[#97CBDC]/20 text-[#97CBDC] border border-[#97CBDC]/40"
-                    : "bg-white/5 text-white/50 hover:bg-white/10 border border-white/10"
-                )}
-              >
-                {bps / 100}%
+      {/* ── Row 1: Wallet connect + Settings ─────────────────────────── */}
+      <div className="flex items-center justify-between gap-2">
+        {/* Connect / address pill */}
+        <ConnectButton.Custom>
+          {({ account, chain, openConnectModal, openAccountModal }) => (
+            account ? (
+              <button type="button" onClick={openAccountModal}
+                className="flex items-center gap-2 rounded-2xl px-3 py-1.5 text-xs font-medium transition-all hover:opacity-80"
+                style={{ background: "var(--zt-primary-15)", color: "var(--zt-primary)", border: "1px solid var(--zt-primary-30)" }}>
+                <span className="w-2 h-2 rounded-full" style={{ background: "var(--zt-success)" }} />
+                {account.displayName}
               </button>
-            ))}
-            <div className="flex items-center gap-1 flex-1 bg-white/5 border border-white/10 rounded-lg px-2 py-1.5">
-              <input
-                type="number"
-                min={1}
-                max={5000}
-                value={slippageBps / 100}
-                onChange={(e) => setSlippageBps(Math.round(parseFloat(e.target.value || "0") * 100))}
-                className="bg-transparent text-white text-xs w-full outline-none"
-                placeholder="Custom"
-              />
-              <span className="text-white/40 text-xs">%</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* From token input */}
-      <div className="rounded-xl border border-white/10 bg-white/5 p-4 flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <span className="text-white/50 text-xs">You Pay</span>
-          {isConnected && fromToken && (
-            <div className="flex items-center gap-2">
-              <span className="text-white/40 text-xs">Balance: {formatAmount(fromBalance)} {fromToken.symbol}</span>
-              <div className="flex gap-1">
-                {[0.5, 1].map((pct) => (
-                  <button
-                    key={pct}
-                    type="button"
-                    onClick={() => setPercentage(pct)}
-                    className="text-[10px] text-[#97CBDC]/70 hover:text-[#97CBDC] px-1.5 py-0.5 rounded bg-[#97CBDC]/10 hover:bg-[#97CBDC]/20 transition-colors"
-                  >
-                    {pct === 1 ? "MAX" : "50%"}
-                  </button>
-                ))}
-              </div>
-            </div>
+            ) : (
+              <button type="button" onClick={openConnectModal}
+                className="rounded-2xl px-4 py-1.5 text-xs font-semibold transition-all hover:opacity-90 active:scale-95"
+                style={{ background: "var(--zt-primary)", color: "var(--zt-btn-text)" }}>
+                Connect
+              </button>
+            )
           )}
-        </div>
-        <div className="flex items-center gap-3">
-          <input
-            type="text"
-            inputMode="decimal"
-            value={fromAmount}
-            onChange={(e) => setFromAmount(sanitizeAmount(e.target.value))}
-            placeholder="0.0"
-            className="bg-transparent text-white text-2xl font-light outline-none flex-1 min-w-0"
-          />
-          <TokenSelector
-            selected={fromToken}
-            tokens={tokenList}
-            disabledAddress={toToken?.address}
-            onSelect={setFromToken}
-          />
-        </div>
-      </div>
+        </ConnectButton.Custom>
 
-      {/* Switch button */}
-      <div className="flex items-center justify-center -my-1">
-        <button
-          type="button"
-          onClick={handleSwitch}
-          className="w-9 h-9 rounded-xl bg-[#0d1117] border border-white/10 flex items-center justify-center text-white/50 hover:text-white hover:border-white/30 transition-colors z-10"
-        >
-          <ArrowDownUp className="w-4 h-4" />
+        {/* Settings icon */}
+        <button type="button" onClick={() => setView("settings")}
+          className="flex items-center justify-center w-8 h-8 rounded-full transition-all hover:opacity-70"
+          style={{ background: "var(--zt-text-8)", border: "1px solid var(--zt-border)", color: "var(--zt-text-50)" }}>
+          <Settings className="w-3.5 h-3.5" />
         </button>
       </div>
 
-      {/* To token output */}
-      <div className="rounded-xl border border-white/10 bg-white/5 p-4 flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <span className="text-white/50 text-xs">You Receive</span>
-          {isConnected && toToken && (
-            <span className="text-white/40 text-xs">Balance: {formatAmount(toBalance)} {toToken.symbol}</span>
+      {/* ── Row 2: Swap label + slippage + timer ─────────────────────── */}
+      <div className="flex items-center justify-between px-0.5">
+        <span className="font-bold text-base" style={{ color: "var(--zt-text)" }}>Swap</span>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => setView("settings")}
+            className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs transition-all hover:opacity-80"
+            style={{ background: "var(--zt-text-8)", color: "var(--zt-text-50)" }}>
+            <Settings className="w-3 h-3" />
+            <span className="tabular-nums">{(slippageBps / 100).toFixed(1)}%</span>
+          </button>
+          {showTimer && (
+            <CircularTimer seconds={countdown} max={10} size={20} isLoading={quoteLoading}
+              onClick={() => { setRefreshCounter(c => c + 1); setCountdown(10) }} />
           )}
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="flex-1 min-w-0">
-            {isQuoteLoading ? (
-              <div className="h-8 w-24 bg-white/10 rounded-lg animate-pulse" />
-            ) : (
-              <span className="text-white text-2xl font-light">
-                {toAmount ? formatAmount(toAmount) : "0.0"}
-              </span>
-            )}
-          </div>
-          <TokenSelector
-            selected={toToken}
-            tokens={tokenList}
-            disabledAddress={fromToken?.address}
-            onSelect={setToToken}
-          />
         </div>
       </div>
 
-      {/* Quote details */}
-      {!isWrapUnwrap && executionPrice && fromToken && toToken && (
-        <SwapDetails
-          fromToken={fromToken}
-          toToken={toToken}
-          executionPrice={executionPrice}
-          priceImpact={priceImpact}
-          tradingFee={tradingFee}
-          outputAmount={toAmount}
-          slippageBps={slippageBps}
+      {/* ── From box ─────────────────────────────────────────────────── */}
+      <div className="rounded-2xl p-4 flex flex-col gap-2 transition-all"
+        style={{ background: "var(--zt-text-8)", border: "1px solid var(--zt-border)" }}>
+        {/* Amount row */}
+        <div className="flex items-center gap-3">
+          <input
+            type="text" inputMode="decimal"
+            value={fromAmount}
+            onChange={e => setFromAmount(sanitizeAmount(e.target.value))}
+            placeholder="0.0"
+            className="bg-transparent text-3xl font-light outline-none flex-1 min-w-0 placeholder-[var(--zt-text-20)]"
+            style={{ color: "var(--zt-text)" }}
+          />
+          <TokenSelector selected={fromToken} onClick={() => setView("select-from")} />
+        </div>
+        {/* Balance row */}
+        {isConnected && fromToken && (
+          <div className="flex items-center justify-between">
+            <span className="text-xs" style={{ color: "var(--zt-text-40)" }}>
+              Balance: {formatAmount(fromBalance)} {fromToken.symbol}
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button onClick={() => setPercentage(0.5)}
+                className="text-[10px] font-medium px-2 py-0.5 rounded-lg transition-colors"
+                style={{ background: "var(--zt-primary-10)", color: "var(--zt-primary-50)" }}>
+                50%
+              </button>
+              <button onClick={() => setPercentage(1)}
+                className="text-[10px] font-medium px-2 py-0.5 rounded-lg transition-colors"
+                style={{ background: "var(--zt-primary-10)", color: "var(--zt-primary-50)" }}>
+                MAX
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Flip button ──────────────────────────────────────────────── */}
+      <div className="relative h-0 flex items-center justify-center z-10">
+        <button type="button" onClick={handleFlip}
+          style={{
+            transform: isFlipping ? "rotate(180deg)" : "rotate(0deg)",
+            transition: "transform 0.25s ease",
+            background: "var(--zt-bg, #0d1117)",
+            border: "1px solid var(--zt-border)",
+            color: "var(--zt-text-50)",
+          }}
+          className="absolute w-9 h-9 rounded-full flex items-center justify-center hover:opacity-70 transition-opacity">
+          <ArrowDown className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* ── To box ───────────────────────────────────────────────────── */}
+      <div className="rounded-2xl p-4 flex flex-col gap-2 transition-all"
+        style={{ background: "var(--zt-text-8)", border: "1px solid var(--zt-border)" }}>
+        <div className="flex items-center gap-3">
+          <div className="flex-1 min-w-0">
+            {quoteLoading ? (
+              <div className="h-9 w-28 rounded-lg animate-pulse" style={{ background: "var(--zt-text-10)" }} />
+            ) : (
+              <span className="text-3xl font-light"
+                style={{ color: toAmount && parseFloat(toAmount) > 0 ? "var(--zt-text)" : "var(--zt-text-20)" }}>
+                {toAmount && parseFloat(toAmount) > 0 ? formatAmount(toAmount, 6) : "0.0"}
+              </span>
+            )}
+          </div>
+          <TokenSelector selected={toToken} onClick={() => setView("select-to")} />
+        </div>
+        {isConnected && toToken && (
+          <span className="text-xs" style={{ color: "var(--zt-text-40)" }}>
+            Balance: {formatAmount(toBalance)} {toToken.symbol}
+          </span>
+        )}
+      </div>
+
+      {/* ── Quote panel ──────────────────────────────────────────────── */}
+      {!isWrapUnwrap && executionPrice && fromToken && toToken && !quoteLoading && (
+        <QuotePanel
+          fromToken={fromToken} toToken={toToken}
+          executionPrice={executionPrice} priceImpact={priceImpact}
+          priceImpactNum={priceImpactNum} tradingFee={tradingFee}
+          minimumReceived={minimumReceived} slippageBps={slippageBps}
         />
       )}
 
-      {/* Errors */}
-      {(hasNoPool || hasInsufficientLiquidity) && fromAmount && parseFloat(fromAmount) > 0 && (
-        <div className="rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3">
-          <p className="text-red-400 text-sm">{quoteError?.message}</p>
+      {/* ── High impact warning ───────────────────────────────────────── */}
+      {isHighImpact && toAmount && parseFloat(toAmount) > 0 && (
+        <div className="rounded-xl px-4 py-3 flex items-start gap-2 border"
+          style={{ background: "var(--zt-error-10)", borderColor: "var(--zt-error-20)" }}>
+          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" style={{ color: "var(--zt-error)" }} />
+          <div>
+            <p className="text-sm font-medium" style={{ color: "var(--zt-error)" }}>High Price Impact</p>
+            <p className="text-xs mt-0.5" style={{ color: "var(--zt-error)" }}>
+              -{priceImpact}% · Consider a smaller trade
+            </p>
+          </div>
         </div>
       )}
 
-      {/* Swap button */}
+      {/* ── Pool error ────────────────────────────────────────────────── */}
+      {(hasNoPool || hasInsufficientLiquidity) && fromAmountNum > 0 && (
+        <div className="rounded-xl px-4 py-2.5 border"
+          style={{ background: "var(--zt-warning-10)", borderColor: "var(--zt-warning-20)" }}>
+          <p className="text-sm" style={{ color: "var(--zt-warning)" }}>{quoteError?.message}</p>
+        </div>
+      )}
+
+      {/* ── CTA ──────────────────────────────────────────────────────── */}
       {!isConnected ? (
         <ConnectButton.Custom>
           {({ openConnectModal }) => (
-            <Button onClick={openConnectModal} variant="primary" size="lg" className="w-full">
+            <button type="button" onClick={openConnectModal}
+              className="w-full h-12 rounded-2xl font-semibold text-sm transition-all hover:opacity-90 active:scale-[0.99]"
+              style={{ background: "var(--zt-primary)", color: "var(--zt-btn-text)" }}>
               Connect Wallet
-            </Button>
+            </button>
           )}
         </ConnectButton.Custom>
       ) : (
-        <Button
-          onClick={handleSwap}
-          disabled={!canSwap && isConnected && !!fromAmount && parseFloat(fromAmount) > 0}
-          variant={canSwap ? "primary" : "default"}
-          size="lg"
-          className="w-full"
-        >
+        <button type="button" onClick={handleSwap}
+          disabled={isLoading || (fromAmountNum > 0 && (hasInsufficientBalance || hasNoPool || hasInsufficientLiquidity || (!isWrapUnwrap && !trade && !quoteLoading)))}
+          className={cn(
+            "w-full h-12 rounded-2xl font-semibold text-sm transition-all active:scale-[0.99] flex items-center justify-center gap-2",
+            (isLoading || !canSwap) && "cursor-not-allowed opacity-50"
+          )}
+          style={canSwap
+            ? isHighImpact
+              ? { background: "var(--zt-error)", color: "var(--zt-text)" }
+              : { background: "var(--zt-primary)", color: "var(--zt-btn-text)" }
+            : { background: "var(--zt-text-8)", color: "var(--zt-text-40)", border: "1px solid var(--zt-border)" }
+          }>
           {isLoading && (
-            <RefreshCw className="w-4 h-4 animate-spin" />
+            <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+            </svg>
           )}
           {buttonLabel}
-        </Button>
+        </button>
+      )}
+    </div>
+  )
+}
+
+// ── QuotePanel ────────────────────────────────────────────────────────────────
+
+function QuotePanel({ fromToken, toToken, executionPrice, priceImpact, priceImpactNum, tradingFee, minimumReceived, slippageBps }: {
+  fromToken: TokenConfig; toToken: TokenConfig
+  executionPrice: string; priceImpact: string; priceImpactNum: number
+  tradingFee: string; minimumReceived: string; slippageBps: number
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const impactColor = priceImpactNum >= 5 ? "var(--zt-error)" : priceImpactNum >= 2 ? "var(--zt-warning)" : "var(--zt-success)"
+
+  return (
+    <div className="rounded-xl border overflow-hidden"
+      style={{ borderColor: "var(--zt-border)", background: "var(--zt-text-5)" }}>
+      <button type="button" onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between px-4 py-2.5">
+        <span className="text-xs" style={{ color: "var(--zt-text-50)" }}>
+          1 {fromToken.symbol} ≈ {executionPrice} {toToken.symbol}
+        </span>
+        <div className="flex items-center gap-2">
+          {priceImpactNum > 0.01 && (
+            <span className="text-xs tabular-nums" style={{ color: impactColor }}>-{priceImpact}%</span>
+          )}
+          <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", expanded && "rotate-180")}
+            style={{ color: "var(--zt-text-30)" }} />
+        </div>
+      </button>
+      {expanded && (
+        <div className="border-t px-4 py-3 flex flex-col gap-2" style={{ borderColor: "var(--zt-border)" }}>
+          {[
+            { label: "Price Impact", value: `${priceImpact}%`, color: impactColor },
+            { label: "Trading Fee", value: `${tradingFee} ${fromToken.symbol}` },
+            { label: "Slippage", value: `${(slippageBps / 100).toFixed(2)}%` },
+            { label: "Min. Received", value: `${minimumReceived} ${toToken.symbol}`, color: "var(--zt-text-80)" },
+            { label: "Route", value: `${fromToken.symbol} → ${toToken.symbol}` },
+          ].map(({ label, value, color }) => (
+            <div key={label} className="flex items-center justify-between">
+              <span className="text-xs" style={{ color: "var(--zt-text-40)" }}>{label}</span>
+              <span className="text-xs font-medium" style={{ color: color ?? "var(--zt-text-60)" }}>{value}</span>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   )

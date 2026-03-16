@@ -1,181 +1,266 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { X } from "lucide-react"
 import { Toaster } from "sonner"
-import { SwapWidget, type SwapWidgetConfig } from "@terminal/components/SwapWidget"
-import { TerminalProviders, type TerminalProvidersConfig } from "@terminal/components/TerminalProviders"
+import { SwapWidget } from "@terminal/components/SwapWidget"
+import { TerminalProviders } from "@terminal/components/TerminalProviders"
+import { ThemeProvider, useTerminalTheme } from "@terminal/theme/ThemeProvider"
+import { ZentraLogo } from "@terminal/components/ZentraLogo"
+import { getTokenList } from "@terminal/config/tokens"
+import { PHAROS_CHAIN_ID } from "@terminal/config/tokens"
 import { cn } from "@terminal/utils/cn"
+import type { ZentraTerminalInitProps, DisplayMode, WidgetPosition, WidgetSize } from "@terminal/types"
 
-export type DisplayMode = "modal" | "widget" | "integrated"
+// ── Public component (mirrors Cetus <CetusSwap initProps={...} />) ────────────
 
-export interface ZentraTerminalProps extends SwapWidgetConfig, TerminalProvidersConfig {
-  mode?: DisplayMode
-  // Modal-specific
-  trigger?: React.ReactNode
-  defaultOpen?: boolean
-  // Widget-specific
-  floatPosition?: "bottom-right" | "bottom-left"
-  // Branding
-  showBranding?: boolean
+export interface ZentraTerminalProps {
+  initProps?: ZentraTerminalInitProps
+  /** Shorthand: override displayMode directly */
+  displayMode?: DisplayMode
 }
 
 /**
- * ZentraTerminal — three display modes:
+ * Drop-in swap terminal for ZentraFi on Pharos EVM.
  *
- * - "integrated": Renders directly in the DOM (embed anywhere)
- * - "widget":     Floating bubble button that expands to the swap panel
- * - "modal":      Dialog overlay triggered by a custom trigger element
+ * Usage:
+ * ```tsx
+ * <ZentraTerminal initProps={{ displayMode: "Integrated", themeType: "Dark" }} />
+ * ```
  */
-export function ZentraTerminal({
-  mode = "integrated",
-  trigger,
-  defaultOpen = false,
-  floatPosition = "bottom-right",
-  showBranding = true,
-  // Provider config
-  walletConnectProjectId,
-  appName,
-  // Widget config
-  defaultFromToken,
-  defaultToToken,
-  defaultSlippageBps,
-  onSwapSuccess,
-  className,
-}: ZentraTerminalProps) {
-  const [open, setOpen] = useState(defaultOpen)
-
-  const widgetConfig: SwapWidgetConfig = {
-    defaultFromToken,
-    defaultToToken,
-    defaultSlippageBps,
+export function ZentraTerminal({ initProps = {}, displayMode: displayModeProp }: ZentraTerminalProps) {
+  const {
+    displayMode: initDisplayMode = "Integrated",
+    themeType = "Dark",
+    theme,
+    independentWallet = true,
+    defaultPair,
+    initialSlippage,
+    walletConnectProjectId = "",
+    appName = "ZentraFi Terminal",
+    widgetPosition = "bottom-right",
+    widgetSize = "default",
+    showBranding = true,
+    logoUrl,
     onSwapSuccess,
+  } = initProps
+
+  const mode = displayModeProp ?? initDisplayMode
+
+  // Resolve default token addresses from pair symbols/addresses
+  const tokenList = useMemo(() => getTokenList(PHAROS_CHAIN_ID), [])
+
+  const resolveTokenAddress = (symbolOrAddr: string | undefined): string | undefined => {
+    if (!symbolOrAddr) return undefined
+    if (symbolOrAddr.startsWith("0x") || symbolOrAddr === "NATIVE") return symbolOrAddr
+    const found = tokenList.find((t) => t.symbol.toLowerCase() === symbolOrAddr.toLowerCase())
+    return found?.address
   }
 
-  const shell = (
-    <TerminalProviders walletConnectProjectId={walletConnectProjectId} appName={appName}>
-      <Toaster position="top-right" richColors theme="dark" />
-      <SwapPanel showBranding={showBranding} widgetConfig={widgetConfig} className={className} />
-    </TerminalProviders>
-  )
+  const defaultFromToken = resolveTokenAddress(defaultPair?.from) ?? "NATIVE"
+  const defaultToToken =
+    resolveTokenAddress(defaultPair?.to) ?? "0xE0BE08c77f415F577A1B3A9aD7a1Df1479564ec8"
+  const defaultSlippageBps = initialSlippage != null ? Math.round(initialSlippage * 100) : 50
 
-  // ── Integrated ────────────────────────────────────────────────────────────
-  if (mode === "integrated") {
-    return shell
-  }
+  const widgetConfig = { defaultFromToken, defaultToToken, defaultSlippageBps, onSwapSuccess }
 
-  // ── Widget (floating) ─────────────────────────────────────────────────────
-  if (mode === "widget") {
-    return (
-      <TerminalProviders walletConnectProjectId={walletConnectProjectId} appName={appName}>
-        <Toaster position="top-right" richColors theme="dark" />
+  // Skip SSR — the swap widget is entirely client-side (wallet, prices, wagmi)
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
+  if (!mounted) return null
 
-        {/* Floating panel */}
-        {open && (
-          <div
-            className={cn(
-              "fixed z-50 w-[380px]",
-              floatPosition === "bottom-right" ? "bottom-20 right-4" : "bottom-20 left-4"
-            )}
-          >
-            <SwapPanel
-              showBranding={showBranding}
-              widgetConfig={widgetConfig}
-              className={className}
-              onClose={() => setOpen(false)}
-            />
-          </div>
-        )}
-
-        {/* FAB trigger */}
-        <button
-          type="button"
-          onClick={() => setOpen(!open)}
-          className={cn(
-            "fixed z-50 w-14 h-14 rounded-full shadow-2xl flex items-center justify-center transition-all duration-200",
-            "bg-[#97CBDC] hover:bg-[#97CBDC]/90 text-black font-bold text-lg",
-            floatPosition === "bottom-right" ? "bottom-4 right-4" : "bottom-4 left-4"
-          )}
-          title="Open Swap"
-        >
-          {open ? <X className="w-6 h-6" /> : <span className="text-xl font-bold">Z</span>}
-        </button>
-      </TerminalProviders>
-    )
-  }
-
-  // ── Modal ─────────────────────────────────────────────────────────────────
   return (
-    <TerminalProviders walletConnectProjectId={walletConnectProjectId} appName={appName}>
-      <Toaster position="top-right" richColors theme="dark" />
-
-      {/* Trigger */}
-      <span onClick={() => setOpen(true)} style={{ cursor: "pointer", display: "inline-block" }}>
-        {trigger ?? (
-          <button
-            type="button"
-            className="px-4 py-2 rounded-xl bg-[#97CBDC] text-black font-semibold text-sm hover:bg-[#97CBDC]/90 transition-colors"
-          >
-            Swap
-          </button>
-        )}
-      </span>
-
-      {/* Backdrop + Dialog */}
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setOpen(false)} />
-          <div className="relative w-full max-w-[420px]">
-            <SwapPanel
-              showBranding={showBranding}
-              widgetConfig={widgetConfig}
-              className={className}
-              onClose={() => setOpen(false)}
-            />
-          </div>
-        </div>
-      )}
-    </TerminalProviders>
+    <ThemeProvider themeType={themeType} theme={theme}>
+      <TerminalProviders
+        walletConnectProjectId={walletConnectProjectId}
+        appName={appName}
+        independentWallet={independentWallet}
+      >
+        <Toaster position="top-right" richColors theme={themeType === "Light" ? "light" : "dark"} />
+        <TerminalRenderer
+          mode={mode}
+          widgetPosition={widgetPosition}
+          widgetSize={widgetSize}
+          showBranding={showBranding}
+          logoUrl={logoUrl}
+          widgetConfig={widgetConfig}
+        />
+      </TerminalProviders>
+    </ThemeProvider>
   )
 }
 
-// ── Internal panel shell ────────────────────────────────────────────────────
+// ── Internal renderer ─────────────────────────────────────────────────────────
+
+interface RendererProps {
+  mode: DisplayMode
+  widgetPosition: WidgetPosition
+  widgetSize: WidgetSize
+  showBranding: boolean
+  logoUrl?: string
+  widgetConfig: Parameters<typeof SwapWidget>[0]
+}
+
+function TerminalRenderer({ mode, widgetPosition, widgetSize, showBranding, logoUrl, widgetConfig }: RendererProps) {
+  const [open, setOpen] = useState(false)
+  const { theme } = useTerminalTheme()
+
+  const panelWidth = widgetSize === "small" ? "w-[340px]" : "w-[400px]"
+
+  const panel = (
+    <SwapPanel
+      showBranding={showBranding}
+      logoUrl={logoUrl}
+      widgetConfig={widgetConfig}
+      onClose={mode !== "Integrated" ? () => setOpen(false) : undefined}
+    />
+  )
+
+  // ── Integrated ─────────────────────────────────────────────────────────────
+  if (mode === "Integrated") {
+    return <div style={{ background: theme.bg_primary }} className="rounded-2xl p-4">{panel}</div>
+  }
+
+  // ── Widget ─────────────────────────────────────────────────────────────────
+  if (mode === "Widget") {
+    const positionClass = {
+      "bottom-right": "bottom-4 right-4",
+      "bottom-left": "bottom-4 left-4",
+      "top-right": "top-4 right-4",
+      "top-left": "top-4 left-4",
+    }[widgetPosition]
+
+    const panelOffsetClass = {
+      "bottom-right": "bottom-20 right-4",
+      "bottom-left": "bottom-20 left-4",
+      "top-right": "top-20 right-4",
+      "top-left": "top-20 left-4",
+    }[widgetPosition]
+
+    return (
+      <>
+        {/* Floating panel */}
+        {open && (
+          <div className={cn("fixed z-[9999]", panelOffsetClass, panelWidth)}>
+            <div
+              style={{ background: theme.bg_primary, borderColor: theme.border }}
+              className="rounded-2xl border shadow-2xl p-4"
+            >
+              {panel}
+            </div>
+          </div>
+        )}
+
+        {/* FAB */}
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          style={{ background: theme.primary, color: theme.btn_text }}
+          className={cn(
+            "fixed z-[9999] w-14 h-14 rounded-full shadow-2xl flex items-center justify-center",
+            "font-bold text-lg transition-all duration-200 hover:scale-105 active:scale-95",
+            positionClass
+          )}
+          title="Open ZentraFi Swap"
+        >
+          {open ? (
+            <X className="w-6 h-6" />
+          ) : logoUrl ? (
+            <img src={logoUrl} alt="Logo" className="w-8 h-8 rounded-full object-cover" />
+          ) : (
+            <ZentraLogo size={28} style={{ color: theme.btn_text }} />
+          )}
+        </button>
+      </>
+    )
+  }
+
+  // ── Modal ──────────────────────────────────────────────────────────────────
+  return (
+    <>
+      {/* Trigger slot — rendered as a button by default */}
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        style={{ background: theme.primary, color: theme.btn_text }}
+        className="px-5 py-2.5 rounded-xl font-semibold text-sm hover:opacity-90 active:scale-95 transition-all"
+      >
+        Launch Swap
+      </button>
+
+      {open && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0"
+            style={{ background: theme.bg_overlay }}
+            onClick={() => setOpen(false)}
+          />
+          {/* Dialog */}
+          <div
+            className={cn("relative z-10 w-full", panelWidth)}
+            style={{ background: theme.bg_primary, borderColor: theme.border }}
+          >
+            <div className="rounded-2xl border p-4">{panel}</div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+// ── SwapPanel shell ───────────────────────────────────────────────────────────
 
 function SwapPanel({
   widgetConfig,
   showBranding,
-  className,
+  logoUrl,
   onClose,
 }: {
-  widgetConfig: SwapWidgetConfig
+  widgetConfig: Parameters<typeof SwapWidget>[0]
   showBranding: boolean
-  className?: string
+  logoUrl?: string
   onClose?: () => void
 }) {
+  const { theme } = useTerminalTheme()
+
   return (
-    <div className={cn("relative rounded-2xl border border-white/10 bg-[#0d1117] shadow-2xl p-4 flex flex-col gap-1")}>
-      {/* Optional close button */}
-      {onClose && (
-        <button
-          type="button"
-          onClick={onClose}
-          className="absolute top-3 right-3 text-white/40 hover:text-white transition-colors"
-        >
-          <X className="w-4 h-4" />
-        </button>
-      )}
-
-      {/* Branding header */}
-      {showBranding && (
-        <div className="flex items-center gap-2 mb-1 pr-8">
-          <div className="w-6 h-6 rounded-full bg-[#97CBDC] flex items-center justify-center text-black font-bold text-xs">
-            Z
+    <div className="flex flex-col gap-3">
+      {/* Header row */}
+      <div className="flex items-center justify-between">
+        {/* {showBranding && (
+          <div className="flex items-center gap-1.5">
+            {logoUrl ? (
+              <img src={logoUrl} alt="Logo" className="w-5 h-5 rounded-full object-cover" />
+            ) : (
+              <ZentraLogo size={18} style={{ color: theme.primary }} />
+            )}
+            <span style={{ color: theme.text_secondary }} className="text-xs font-medium">
+              Powered by{" "}
+              <span style={{ color: theme.primary }} className="font-semibold">
+                ZentraFi
+              </span>
+            </span>
           </div>
-          <span className="text-white/60 text-xs font-medium">Powered by ZentraFi</span>
-        </div>
-      )}
+        )} */}
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            style={{ color: theme.text_secondary }}
+            className="ml-auto hover:opacity-70 transition-opacity"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
+      </div>
 
-      <SwapWidget {...widgetConfig} className={className} />
+      <SwapWidget {...widgetConfig} />
+      
+      
     </div>
   )
 }
+
+// Re-export types for convenience
+export type { ZentraTerminalInitProps, DisplayMode, WidgetPosition, WidgetSize }

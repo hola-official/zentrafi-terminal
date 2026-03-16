@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 import "./globals.css"
 
 export const metadata: Metadata = {
-  title: "@zentrafi/terminal — Demo",
+  title: "ZentraFi Terminal",
   description: "Embeddable swap terminal for ZentraFi on Pharos EVM",
 }
 
