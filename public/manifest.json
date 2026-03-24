@@ -1,0 +1,26 @@
+{
+  "name": "ZentraFi Terminal",
+  "short_name": "ZentraFi",
+  "description": "Embeddable swap terminal for ZentraFi on Pharos EVM",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0f1a",
+  "theme_color": "#0a0f1a",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/zentra-mascot.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/zentra-mascot.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "categories": ["finance", "utilities"],
+  "lang": "en"
+}

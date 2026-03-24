@@ -270,3 +270,25 @@
 .scrollbar-hide::-webkit-scrollbar {
   display: none;             /* Chrome, Safari, Opera */
 }
+
+/* ── Ambient orb animations for demo page ─────────────────────────────────── */
+@keyframes orb-drift-1 {
+  0%,  100% { transform: translate(0, 0); }
+  25%       { transform: translate(60px, -40px); }
+  50%       { transform: translate(20px, 60px); }
+  75%       { transform: translate(-40px, 20px); }
+}
+@keyframes orb-drift-2 {
+  0%,  100% { transform: translate(0, 0); }
+  25%       { transform: translate(-50px, 40px); }
+  50%       { transform: translate(-30px, -55px); }
+  75%       { transform: translate(50px, -20px); }
+}
+@keyframes orb-drift-3 {
+  0%,  100% { transform: translate(-50%, -50%) scale(1); }
+  33%       { transform: translate(calc(-50% + 40px), calc(-50% + 50px)) scale(1.06); }
+  66%       { transform: translate(calc(-50% - 30px), calc(-50% - 40px)) scale(0.94); }
+}
+.animate-orb-1 { animation: orb-drift-1 18s ease-in-out infinite; }
+.animate-orb-2 { animation: orb-drift-2 22s ease-in-out infinite; }
+.animate-orb-3 { animation: orb-drift-3 26s ease-in-out infinite; }

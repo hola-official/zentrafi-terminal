@@ -15,7 +15,7 @@ export function TokenSelector({ selected, onClick }: TokenSelectorProps) {
     <button
       type="button"
       onClick={onClick}
-      className="flex items-center gap-2 rounded-2xl px-3 py-2 transition-all shrink-0 hover:opacity-80"
+      className="flex items-center gap-2 rounded-2xl px-3 py-2 transition-all shrink-0 hover:opacity-80 cursor-pointer"
       style={{ background: "var(--zt-text-10)", border: "1px solid var(--zt-border)" }}
     >
       {selected ? (

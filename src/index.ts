@@ -39,7 +39,7 @@ export { pharosTestnet } from "@terminal/config/chains"
 // ── Types ─────────────────────────────────────────────────────────────────────
 export type {
   ZentraTerminalInitProps,
-  ZentraXInitOptions,
+  ZentraXInitOptions,   // was ZentraSwapInitOptions
   DisplayMode,
   ThemeType,
   TerminalTheme,

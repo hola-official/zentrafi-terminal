@@ -1,0 +1,8 @@
+/*
+ * Terminal CSS entry point.
+ * Imported by src/vanilla/init.ts so the CDN build includes:
+ *   1. All Tailwind utilities scanned from src/
+ *   2. RainbowKit modal styles
+ */
+@import "tailwindcss";
+@import "@rainbow-me/rainbowkit/styles.css";

@@ -1,16 +1,16 @@
 import type { TerminalTheme, ThemeType } from "@terminal/types"
 
 export const DARK_THEME: Required<TerminalTheme> = {
-  bg_primary: "#0d1117",
+  bg_primary: "#0a0f1a",
   primary: "#97CBDC",
   text_primary: "#FFFFFF",
   text_secondary: "#6b7280",
   success: "#4ade80",
   warning: "#fbbf24",
   error: "#f87171",
-  btn_text: "#000000",
-  bg_overlay: "rgba(0,0,0,0.65)",
-  border: "rgba(255,255,255,0.1)",
+  btn_text: "#0a0f1a",
+  bg_overlay: "rgba(10,15,26,0.85)",
+  border: "#475B74",
 }
 
 export const LIGHT_THEME: Required<TerminalTheme> = {
@@ -73,5 +73,6 @@ export function themeToCSSVars(theme: Required<TerminalTheme>): string {
     --zt-warning-20: ${mix(theme.warning, 20)};
     --zt-success-10: ${mix(theme.success, 10)};
     --zt-success-20: ${mix(theme.success, 20)};
+    --zt-primary-gradient: linear-gradient(135deg, ${theme.primary} 0%, color-mix(in srgb, ${theme.primary} 60%, #001850) 100%);
   `.trim()
 }

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useReducer, useEffect, useRef } from "react"
 import { usePublicClient } from "wagmi"
 import { Token, TokenAmount } from "@zentrafi/sdk-core"
 import { PairV2, RouteV2, TradeV2 } from "@zentrafi/sdk-v2"
@@ -29,6 +29,45 @@ export interface SwapQuoteResult {
   error: Error | null
 }
 
+type QuoteAction =
+  | { type: "FETCH_START" }
+  | { type: "FETCH_SUCCESS"; trade: TradeV2; outputAmount: string; executionPrice: string; priceImpact: string; tradingFee: string }
+  | { type: "FETCH_ERROR"; error: Error }
+  | { type: "CLEAR" }
+
+const INITIAL_STATE: SwapQuoteResult = {
+  trade: null,
+  outputAmount: "",
+  executionPrice: "",
+  priceImpact: "",
+  tradingFee: "",
+  isLoading: false,
+  error: null,
+}
+
+function quoteReducer(state: SwapQuoteResult, action: QuoteAction): SwapQuoteResult {
+  switch (action.type) {
+    case "FETCH_START":
+      return { ...state, isLoading: true, error: null }
+    case "FETCH_SUCCESS":
+      return {
+        trade: action.trade,
+        outputAmount: action.outputAmount,
+        executionPrice: action.executionPrice,
+        priceImpact: action.priceImpact,
+        tradingFee: action.tradingFee,
+        isLoading: false,
+        error: null,
+      }
+    case "FETCH_ERROR":
+      return { ...INITIAL_STATE, error: action.error }
+    case "CLEAR":
+      return INITIAL_STATE
+    default:
+      return state
+  }
+}
+
 export function useSwapQuote({
   inputToken,
   outputToken,
@@ -41,29 +80,12 @@ export function useSwapQuote({
   enabled = true,
   refreshCounter = 0,
 }: SwapQuoteParams): SwapQuoteResult {
-  const [trade, setTrade] = useState<TradeV2 | null>(null)
-  const [outputAmount, setOutputAmount] = useState("")
-  const [executionPrice, setExecutionPrice] = useState("")
-  const [priceImpact, setPriceImpact] = useState("")
-  const [tradingFee, setTradingFee] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<Error | null>(null)
-
+  const [state, dispatch] = useReducer(quoteReducer, INITIAL_STATE)
   const requestIdRef = useRef(0)
   const publicClient = usePublicClient({ chainId })
 
   useEffect(() => {
     const currentRequestId = ++requestIdRef.current
-
-    const clear = () => {
-      setTrade(null)
-      setOutputAmount("")
-      setExecutionPrice("")
-      setPriceImpact("")
-      setTradingFee("")
-      setError(null)
-      setIsLoading(false)
-    }
 
     const fetchQuote = async () => {
       if (
@@ -74,12 +96,11 @@ export function useSwapQuote({
         Number.parseFloat(typedValue) <= 0 ||
         !publicClient
       ) {
-        clear()
+        dispatch({ type: "CLEAR" })
         return
       }
 
-      setIsLoading(true)
-      setError(null)
+      dispatch({ type: "FETCH_START" })
 
       try {
         const directPair = new PairV2(inputToken, outputToken)
@@ -137,24 +158,17 @@ export function useSwapQuote({
 
         if (currentRequestId !== requestIdRef.current) return
 
-        setTrade(bestTrade)
-        setOutputAmount(output)
-        setExecutionPrice(bestTrade.executionPrice.toSignificant(6))
-        setPriceImpact(bestTrade.priceImpact.toSignificant(2))
-        setTradingFee(feeInfo.feeAmountIn.toSignificant(6))
-        setError(null)
+        dispatch({
+          type: "FETCH_SUCCESS",
+          trade: bestTrade,
+          outputAmount: output,
+          executionPrice: bestTrade.executionPrice.toSignificant(6),
+          priceImpact: bestTrade.priceImpact.toSignificant(2),
+          tradingFee: feeInfo.feeAmountIn.toSignificant(6),
+        })
       } catch (err) {
         if (currentRequestId === requestIdRef.current) {
-          setError(err as Error)
-          setTrade(null)
-          setOutputAmount("")
-          setExecutionPrice("")
-          setPriceImpact("")
-          setTradingFee("")
-        }
-      } finally {
-        if (currentRequestId === requestIdRef.current) {
-          setIsLoading(false)
+          dispatch({ type: "FETCH_ERROR", error: err as Error })
         }
       }
     }
@@ -162,5 +176,5 @@ export function useSwapQuote({
     fetchQuote()
   }, [inputToken, outputToken, typedValue, isExactIn, isNativeIn, isNativeOut, bases, chainId, publicClient, enabled, refreshCounter])
 
-  return { trade, outputAmount, executionPrice, priceImpact, tradingFee, isLoading, error }
+  return state
 }

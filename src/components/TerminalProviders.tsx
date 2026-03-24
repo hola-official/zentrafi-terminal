@@ -1,7 +1,7 @@
 "use client"
 
-import { type ReactNode, useRef, createContext, useContext } from "react"
-import { WagmiProvider, createConfig, http } from "wagmi"
+import { type ReactNode, useRef, createContext, useContext, useEffect } from "react"
+import { WagmiProvider, createConfig, http, usePublicClient } from "wagmi"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { RainbowKitProvider, darkTheme, lightTheme, connectorsForWallets } from "@rainbow-me/rainbowkit"
 import {
@@ -86,6 +86,24 @@ const customAvatar = ({
     <AddressAvatar address={address} size={size} />
   )
 
+/**
+ * Renders nothing, but warns in dev if independentWallet=false and no WagmiProvider
+ * is found up the tree (publicClient will be undefined in that case).
+ */
+function WagmiPresenceGuard() {
+  const publicClient = usePublicClient()
+  useEffect(() => {
+    if (!publicClient) {
+      console.warn(
+        "[ZentraFi Terminal] independentWallet=false but no WagmiProvider was found above this " +
+        "component. Make sure your app wraps ZentraTerminal with <WagmiProvider> and that the " +
+        "Pharos testnet chain (id: 688689) is included in your wagmi config."
+      )
+    }
+  }, [publicClient])
+  return null
+}
+
 export function TerminalProviders({
   walletConnectProjectId = "",
   appName = "ZentraFi Terminal",
@@ -131,6 +149,7 @@ export function TerminalProviders({
   if (!independentWallet) {
     return (
       <IndependentWalletContext.Provider value={false}>
+        <WagmiPresenceGuard />
         {children}
       </IndependentWalletContext.Provider>
     )

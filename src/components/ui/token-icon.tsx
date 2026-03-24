@@ -1,7 +1,7 @@
 "use client"
 
 import Image from "next/image"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { cn } from "@terminal/utils/cn"
 
 interface TokenIconProps {
@@ -13,6 +13,11 @@ interface TokenIconProps {
 
 export function TokenIcon({ src, symbol, size = 24, className }: TokenIconProps) {
   const [imgError, setImgError] = useState(false)
+
+  // Reset error state whenever the image source changes (e.g. after token swap/flip)
+  useEffect(() => {
+    setImgError(false)
+  }, [src])
 
   const fallbackLetter = symbol?.charAt(0)?.toUpperCase() ?? "?"
 

@@ -90,13 +90,16 @@ export interface ZentraTerminalInitProps {
   /** Callback fired after a successful swap/wrap/unwrap */
   onSwapSuccess?: (txHash: string) => void
 
+  /** Callback fired when a swap/approval fails (after user rejects or tx reverts) */
+  onError?: (error: Error) => void
+
   /** Additional RPCs to add to the network config */
   rpcUrls?: RpcConfig[]
 }
 
 // ── HTML / vanilla JS ─────────────────────────────────────────────────────────
 
-export interface ZentraSwapInitOptions extends ZentraTerminalInitProps {
+export interface ZentraXInitOptions extends ZentraTerminalInitProps {
   /** DOM container ID to render into */
   containerId: string
 }
@@ -105,8 +108,10 @@ export interface ZentraSwapInitOptions extends ZentraTerminalInitProps {
 
 declare global {
   interface Window {
-    ZentraSwap: {
-      init: (options: ZentraSwapInitOptions) => void
+    ZentraX: {
+      init: (options: ZentraXInitOptions) => void
+      /** Re-render an existing instance with merged options (no remount) */
+      update: (containerId: string, options: Partial<ZentraTerminalInitProps>) => void
       destroy: (containerId?: string) => void
     }
   }

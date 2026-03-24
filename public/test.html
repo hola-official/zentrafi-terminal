@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ZentraFi Terminal — Local Test</title>
+
+  <!-- 1. Terminal styles (from local build) -->
+  <link rel="stylesheet" href="../dist/cdn/style.css" />
+
+  <!-- 2. Terminal script (from local build) -->
+  <script src="../dist/cdn/main.js"></script>
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      background: #0d1117;
+      font-family: system-ui, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 40px;
+      padding: 40px 20px;
+    }
+    h1 { color: #fff; font-size: 1.25rem; font-weight: 600; }
+    .grid { display: flex; flex-wrap: wrap; gap: 32px; justify-content: center; }
+    .card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 16px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    label { color: #8b949e; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  </style>
+</head>
+<body>
+
+  <h1>ZentraFi Terminal — Integration Test</h1>
+
+  <div class="grid">
+
+    <!-- ── Integrated (dark) ──────────────────────────────────── -->
+    <div class="card">
+      <label>Integrated · Dark</label>
+      <div id="zentra-integrated"></div>
+    </div>
+
+    <!-- ── Integrated (light) ─────────────────────────────────── -->
+    <div class="card" style="background: #f6f8fa; border-color: #d0d7de;">
+      <label style="color: #57606a;">Integrated · Light</label>
+      <div id="zentra-light"></div>
+    </div>
+
+  </div>
+
+  <!-- ── Widget (floating FAB) is mounted on body ──────────────── -->
+  <div id="zentra-widget"></div>
+
+  <!-- ── Modal trigger ─────────────────────────────────────────── -->
+  <div class="card" style="align-items:center;">
+    <label>Modal mode — click to open</label>
+    <div id="zentra-modal"></div>
+  </div>
+
+  <script>
+    // ── 1. Integrated dark ──────────────────────────────────────────────────
+    window.ZentraX.init({
+      containerId: "zentra-integrated",
+      displayMode: "Integrated",
+      themeType: "Dark",
+      theme: {
+        bg_primary: "#1B242C",
+        primary: "#97CBDC",
+        text_primary: "#FFFFFF",
+        text_secondary: "#909CA4",
+        success: "#68FFD8",
+        warning: "#FFCA68",
+        error: "#ff5073",
+        btn_text: "#000000",
+      },
+      independentWallet: true,
+      // walletConnectProjectId: "YOUR_PROJECT_ID",
+      onSwapSuccess: function(hash) {
+        console.log("[ZentraX] Swap success:", hash)
+      },
+      onError: function(err) {
+        console.warn("[ZentraX] Swap error:", err.message)
+      },
+    })
+
+    // ── 2. Integrated light ─────────────────────────────────────────────────
+    window.ZentraX.init({
+      containerId: "zentra-light",
+      displayMode: "Integrated",
+      themeType: "Light",
+      independentWallet: true,
+    })
+
+    // ── 3. Widget (floating FAB) ────────────────────────────────────────────
+    window.ZentraX.init({
+      containerId: "zentra-widget",
+      displayMode: "Widget",
+      themeType: "Dark",
+      widgetPosition: "bottom-right",
+      independentWallet: true,
+    })
+
+    // ── 4. Modal ────────────────────────────────────────────────────────────
+    window.ZentraX.init({
+      containerId: "zentra-modal",
+      displayMode: "Modal",
+      themeType: "Dark",
+      independentWallet: true,
+    })
+
+    // ── 5. Test window.ZentraX.update() ────────────────────────────────────
+    // Uncomment to test live theme switching:
+    // setTimeout(function() {
+    //   window.ZentraX.update("zentra-integrated", {
+    //     theme: { primary: "#ff6b6b", btn_text: "#ffffff" }
+    //   })
+    // }, 5000)
+  </script>
+
+</body>
+</html>

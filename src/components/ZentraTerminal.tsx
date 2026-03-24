@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { X } from "lucide-react"
+import { ChevronDown } from "lucide-react"
 import { Toaster } from "sonner"
 import { SwapWidget } from "@terminal/components/SwapWidget"
 import { TerminalProviders } from "@terminal/components/TerminalProviders"
@@ -43,6 +43,7 @@ export function ZentraTerminal({ initProps = {}, displayMode: displayModeProp }:
     showBranding = true,
     logoUrl,
     onSwapSuccess,
+    onError,
   } = initProps
 
   const mode = displayModeProp ?? initDisplayMode
@@ -62,12 +63,19 @@ export function ZentraTerminal({ initProps = {}, displayMode: displayModeProp }:
     resolveTokenAddress(defaultPair?.to) ?? "0xE0BE08c77f415F577A1B3A9aD7a1Df1479564ec8"
   const defaultSlippageBps = initialSlippage != null ? Math.round(initialSlippage * 100) : 50
 
-  const widgetConfig = { defaultFromToken, defaultToToken, defaultSlippageBps, onSwapSuccess }
+  const widgetConfig = { defaultFromToken, defaultToToken, defaultSlippageBps, onSwapSuccess, onError }
 
   // Skip SSR — the swap widget is entirely client-side (wallet, prices, wagmi)
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
-  if (!mounted) return null
+
+  if (!mounted) {
+    return (
+      <ThemeProvider themeType={themeType} theme={theme}>
+        <MountSkeleton mode={mode} widgetPosition={widgetPosition} widgetSize={widgetSize} />
+      </ThemeProvider>
+    )
+  }
 
   return (
     <ThemeProvider themeType={themeType} theme={theme}>
@@ -106,7 +114,9 @@ function TerminalRenderer({ mode, widgetPosition, widgetSize, showBranding, logo
   const { theme } = useTerminalTheme()
 
   const panelWidth = widgetSize === "small" ? "w-[340px]" : "w-[400px]"
+  const panelMaxWidth = widgetSize === "small" ? "max-w-[340px]" : "max-w-[400px]"
 
+  // Always render SwapPanel — never unmount it so wallet connection persists
   const panel = (
     <SwapPanel
       showBranding={showBranding}
@@ -137,19 +147,30 @@ function TerminalRenderer({ mode, widgetPosition, widgetSize, showBranding, logo
       "top-left": "top-20 left-4",
     }[widgetPosition]
 
+    // For top positions panel slides down on open, bottom positions slide up
+    const isTop = widgetPosition.startsWith("top")
+
     return (
       <>
-        {/* Floating panel */}
-        {open && (
-          <div className={cn("fixed z-[9999]", panelOffsetClass, panelWidth)}>
-            <div
-              style={{ background: theme.bg_primary, borderColor: theme.border }}
-              className="rounded-2xl border shadow-2xl p-4"
-            >
-              {panel}
-            </div>
+        {/* Floating panel — always mounted, shown/hidden via CSS */}
+        <div
+          className={cn(
+            "fixed z-[9999] max-w-[calc(100vw-2rem)] transition-all duration-300 ease-out",
+            panelOffsetClass, panelWidth,
+            open
+              ? "opacity-100 translate-y-0 pointer-events-auto"
+              : isTop
+                ? "opacity-0 -translate-y-3 pointer-events-none"
+                : "opacity-0 translate-y-3 pointer-events-none"
+          )}
+        >
+          <div
+            style={{ background: theme.bg_primary, borderColor: theme.border }}
+            className="rounded-2xl border shadow-2xl p-4"
+          >
+            {panel}
           </div>
-        )}
+        </div>
 
         {/* FAB */}
         <button
@@ -158,18 +179,19 @@ function TerminalRenderer({ mode, widgetPosition, widgetSize, showBranding, logo
           style={{ background: theme.primary, color: theme.btn_text }}
           className={cn(
             "fixed z-[9999] w-14 h-14 rounded-full shadow-2xl flex items-center justify-center",
-            "font-bold text-lg transition-all duration-200 hover:scale-105 active:scale-95",
+            "transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer",
             positionClass
           )}
           title="Open ZentraFi Swap"
         >
-          {open ? (
-            <X className="w-6 h-6" />
-          ) : logoUrl ? (
-            <img src={logoUrl} alt="Logo" className="w-8 h-8 rounded-full object-cover" />
-          ) : (
-            <ZentraLogo size={28} style={{ color: theme.btn_text }} />
-          )}
+          <span className={cn("absolute inset-0 rounded-full flex items-center justify-center transition-all duration-200",
+            open ? "opacity-100 scale-100" : "opacity-0 scale-75")}>
+            <ChevronDown className="w-6 h-6" />
+          </span>
+          <span className={cn("absolute inset-0 rounded-full overflow-hidden transition-all duration-200",
+            open ? "opacity-0 scale-75" : "opacity-100 scale-100")}>
+            <img src={logoUrl || "/zentra-mascot.png"} alt="Logo" className="w-14 h-14 object-cover" />
+          </span>
         </button>
       </>
     )
@@ -178,33 +200,46 @@ function TerminalRenderer({ mode, widgetPosition, widgetSize, showBranding, logo
   // ── Modal ──────────────────────────────────────────────────────────────────
   return (
     <>
-      {/* Trigger slot — rendered as a button by default */}
+      {/* Logo trigger button */}
       <button
         type="button"
         onClick={() => setOpen(true)}
-        style={{ background: theme.primary, color: theme.btn_text }}
-        className="px-5 py-2.5 rounded-xl font-semibold text-sm hover:opacity-90 active:scale-95 transition-all"
+        className="w-16 h-16 rounded-full overflow-hidden shadow-2xl transition-all duration-200 hover:scale-110 active:scale-95 ring-2 cursor-pointer"
+        style={{ boxShadow: `0 0 0 2px ${theme.primary}, 0 0 24px ${theme.primary}40` }}
+        title="Open ZentraFi Swap"
       >
-        Launch Swap
+        <img
+          src={logoUrl || "/zentra-mascot.png"}
+          alt="Open ZentraFi Swap"
+          className="w-full h-full object-cover"
+        />
       </button>
 
-      {open && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-          {/* Backdrop */}
-          <div
-            className="absolute inset-0"
-            style={{ background: theme.bg_overlay }}
-            onClick={() => setOpen(false)}
-          />
-          {/* Dialog */}
-          <div
-            className={cn("relative z-10 w-full", panelWidth)}
-            style={{ background: theme.bg_primary, borderColor: theme.border }}
-          >
-            <div className="rounded-2xl border p-4">{panel}</div>
-          </div>
+      {/* Modal overlay — always mounted, shown/hidden via CSS to preserve wallet state */}
+      <div
+        className={cn(
+          "fixed inset-0 z-[9999] flex items-center justify-center p-4 transition-all duration-300",
+          open ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+        )}
+      >
+        {/* Backdrop */}
+        <div
+          className="absolute inset-0 cursor-pointer"
+          style={{ background: theme.bg_overlay }}
+          onClick={() => setOpen(false)}
+        />
+        {/* Dialog — slides up + fades in */}
+        <div
+          className={cn(
+            "relative z-10 w-full transition-all duration-300 ease-out",
+            panelMaxWidth,
+            open ? "scale-100 translate-y-0" : "scale-95 translate-y-4"
+          )}
+          style={{ background: theme.bg_primary, borderColor: theme.border }}
+        >
+          <div className="rounded-2xl border p-4">{panel}</div>
         </div>
-      )}
+      </div>
     </>
   )
 }
@@ -243,7 +278,7 @@ function SwapPanel({
             </span>
           </div>
         )} */}
-        {onClose && (
+        {/* {onClose && (
           <button
             type="button"
             onClick={onClose}
@@ -252,12 +287,104 @@ function SwapPanel({
           >
             <X className="w-4 h-4" />
           </button>
-        )}
+        )} */}
       </div>
 
       <SwapWidget {...widgetConfig} />
       
-      
+      <div className="flex items-center gap-1.5">
+          {/* <img src="/zentra-mascot.png" alt="ZentraFi Mascot" className="w-5 h-5 rounded full object-cover" /> */}
+          
+            <span style={{ color: theme.text_secondary }} className="text-xs font-medium">
+              Powered by{" "}
+              <span style={{ color: theme.primary }} className="font-semibold">
+                ZentraFi
+              </span>
+            </span>
+          </div>
+    </div>
+  )
+}
+
+// ── Mount skeleton (shows before hydration, avoids layout shift) ──────────────
+
+function MountSkeleton({
+  mode,
+  widgetPosition,
+  widgetSize,
+}: {
+  mode: DisplayMode
+  widgetPosition: WidgetPosition
+  widgetSize: WidgetSize
+}) {
+  const { theme } = useTerminalTheme()
+  const shimmer: React.CSSProperties = { background: "rgba(255,255,255,0.07)", borderRadius: 8 }
+  const pulse = "animate-pulse"
+
+  if (mode === "Widget") {
+    const posClass = {
+      "bottom-right": "bottom-4 right-4",
+      "bottom-left": "bottom-4 left-4",
+      "top-right": "top-4 right-4",
+      "top-left": "top-4 left-4",
+    }[widgetPosition]
+    return (
+      <div
+        className={cn("fixed z-[9999] w-14 h-14 rounded-full", pulse, posClass)}
+        style={{ background: theme.primary, opacity: 0.7 }}
+      />
+    )
+  }
+
+  if (mode === "Modal") {
+    return (
+      <div
+        className={cn("px-5 py-2.5 rounded-xl w-32 h-9", pulse)}
+        style={{ background: theme.primary, opacity: 0.7 }}
+      />
+    )
+  }
+
+  // Integrated — full panel shimmer
+  const panelWidth = widgetSize === "small" ? "w-[340px]" : "w-[400px]"
+  return (
+    <div
+      className={cn("rounded-2xl p-4 flex flex-col gap-3", pulse, panelWidth)}
+      style={{ background: theme.bg_primary }}
+    >
+      {/* Header row */}
+      <div className="flex justify-between items-center">
+        <div className="h-5 w-20 rounded" style={shimmer} />
+        <div className="h-5 w-16 rounded" style={shimmer} />
+      </div>
+      {/* From box */}
+      <div className="rounded-2xl p-4 flex flex-col gap-3" style={{ background: "rgba(255,255,255,0.05)" }}>
+        <div className="flex justify-between">
+          <div className="h-3 w-12 rounded" style={shimmer} />
+          <div className="h-3 w-20 rounded" style={shimmer} />
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="h-8 w-8 rounded-full" style={shimmer} />
+          <div className="h-8 flex-1 rounded-xl" style={shimmer} />
+        </div>
+      </div>
+      {/* Arrow */}
+      <div className="flex justify-center">
+        <div className="h-8 w-8 rounded-full" style={shimmer} />
+      </div>
+      {/* To box */}
+      <div className="rounded-2xl p-4 flex flex-col gap-3" style={{ background: "rgba(255,255,255,0.05)" }}>
+        <div className="flex justify-between">
+          <div className="h-3 w-12 rounded" style={shimmer} />
+          <div className="h-3 w-20 rounded" style={shimmer} />
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="h-8 w-8 rounded-full" style={shimmer} />
+          <div className="h-8 flex-1 rounded-xl" style={shimmer} />
+        </div>
+      </div>
+      {/* Button */}
+      <div className="h-12 rounded-xl" style={{ ...shimmer, background: theme.primary, opacity: 0.4 }} />
     </div>
   )
 }
