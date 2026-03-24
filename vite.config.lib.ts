@@ -22,6 +22,7 @@ export default defineConfig({
       fileName: (format) => (format === "es" ? "index.mjs" : "index.js"),
     },
     outDir: "dist",
+    emptyOutDir: false,
     sourcemap: true,
     cssCodeSplit: false,
     rollupOptions: {

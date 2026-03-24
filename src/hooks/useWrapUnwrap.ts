@@ -5,7 +5,18 @@ import { useWriteContract, useWaitForTransactionReceipt } from "wagmi"
 import { parseUnits } from "viem"
 import { WPHRS_ADDRESS, WPHRS_ABI } from "@terminal/config/contracts"
 
-export function useWrapUnwrap() {
+export interface UseWrapUnwrapResult {
+  wrap: (amount: string) => Promise<void>
+  unwrap: (amount: string) => Promise<void>
+  hash: string | undefined
+  error: Error | null
+  isPending: boolean
+  isConfirming: boolean
+  isConfirmed: boolean
+  reset: () => void
+}
+
+export function useWrapUnwrap(): UseWrapUnwrapResult {
   const [isPendingLocal, setIsPendingLocal] = useState(false)
   const [pendingTxPromise, setPendingTxPromise] = useState<{
     resolve: () => void
