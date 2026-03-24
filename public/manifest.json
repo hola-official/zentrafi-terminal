@@ -9,16 +9,10 @@
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "/zentra-mascot.png",
-      "sizes": "192x192",
+      "src": "/icon.png",
+      "sizes": "384x384",
       "type": "image/png",
       "purpose": "any maskable"
-    },
-    {
-      "src": "/zentra-mascot.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
     }
   ],
   "categories": ["finance", "utilities"],
