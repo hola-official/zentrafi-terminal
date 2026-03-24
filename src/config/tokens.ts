@@ -78,7 +78,7 @@ export const TOKEN_LIST: Record<number, TokenConfig[]> = {
       name: "Wrapped Ethereum",
       address: "0x7d211f77525ea39a0592794f793cc1036eeaccd5",
       decimals: 18,
-      icon: "/weth-token.jpg",
+      icon: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png",
       chainId: PHAROS_CHAIN_ID,
     },
   ],
