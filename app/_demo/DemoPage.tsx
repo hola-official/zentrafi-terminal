@@ -216,25 +216,27 @@ import '@zentrafi/terminal/dist/style.css'
       </div>
 
       {/* ── Header ──────────────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-40 backdrop-blur-xl px-6 py-3.5 flex items-center justify-between"
+      <header className="sticky top-0 z-40 backdrop-blur-xl px-4 sm:px-6 py-3.5 flex items-center justify-between"
         style={{ background: "rgba(6,9,16,0.75)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-        <ZentraLogoAnimated showTagline={false} />
-        <div className="flex items-center gap-2">
-          {/* Social icon links */}
-          {[
-            { href: "https://x.com/zentrafi", icon: <XIcon className="w-4 h-4" />, title: "X (Twitter)" },
-            { href: "https://github.com/Zentra-Finance/zentrafi-terminal", icon: <GitHubIcon className="w-4 h-4" />, title: "GitHub" },
-            { href: "https://t.me/zentrafi", icon: <TelegramIcon className="w-4 h-4" />, title: "Telegram" },
-            { href: "https://discord.com/invite/rW7VJ8JjbC", icon: <DiscordIcon className="w-4 h-4" />, title: "Discord" },
-          ].map(({ href, icon, title }) => (
-            <a key={title} href={href} target="_blank" rel="noopener noreferrer" title={title}
-              className="w-8 h-8 flex items-center justify-center rounded-lg transition-all duration-200 text-white/35 hover:text-white/80 hover:bg-white/[0.06]">
-              {icon}
-            </a>
-          ))}
-          <div className="w-px h-5 mx-1" style={{ background: "rgba(255,255,255,0.08)" }} />
+        <ZentraLogoAnimated showTagline={false} size="sm" />
+        <div className="flex items-center gap-1 sm:gap-2">
+          {/* Social icon links — hidden on mobile, visible sm+ */}
+          <div className="hidden sm:flex items-center gap-1">
+            {[
+              { href: "https://x.com/zentrafi", icon: <XIcon className="w-4 h-4" />, title: "X (Twitter)" },
+              { href: "https://github.com/Zentra-Finance/zentrafi-terminal", icon: <GitHubIcon className="w-4 h-4" />, title: "GitHub" },
+              { href: "https://t.me/zentrafi", icon: <TelegramIcon className="w-4 h-4" />, title: "Telegram" },
+              { href: "https://discord.com/invite/rW7VJ8JjbC", icon: <DiscordIcon className="w-4 h-4" />, title: "Discord" },
+            ].map(({ href, icon, title }) => (
+              <a key={title} href={href} target="_blank" rel="noopener noreferrer" title={title}
+                className="w-8 h-8 flex items-center justify-center rounded-lg transition-all duration-200 text-white/35 hover:text-white/80 hover:bg-white/[0.06]">
+                {icon}
+              </a>
+            ))}
+            <div className="w-px h-5 mx-1" style={{ background: "rgba(255,255,255,0.08)" }} />
+          </div>
           <a href="https://x.zentrafi.xyz" target="_blank" rel="noopener noreferrer"
-            className="px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-200 hover:opacity-90 hover:scale-105 active:scale-95"
+            className="px-3 sm:px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-200 hover:opacity-90 hover:scale-105 active:scale-95 whitespace-nowrap"
             style={{ background: "linear-gradient(135deg, #97CBDC 0%, #018ABD 100%)", color: "#0a0f1a" }}>
             Launch App
           </a>
@@ -251,11 +253,10 @@ import '@zentrafi/terminal/dist/style.css'
               WebkitBackgroundClip: "text",
               WebkitTextFillColor: "transparent",
               backgroundClip: "text",
-              minWidth: "18ch",
             }}>
               <AnimatedTitle />
             </h1>
-            <span className=" py-0.5 rounded-md text-[10px] font-bold uppercase tracking-widest self-start mt-1"
+            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-widest self-start mt-1"
               style={{ background: "rgba(151,203,220,0.12)", border: "1px solid rgba(151,203,220,0.28)", color: "#97CBDC" }}>
               beta
             </span>
