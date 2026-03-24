@@ -255,7 +255,7 @@ import '@zentrafi/terminal/dist/style.css'
             }}>
               <AnimatedTitle />
             </h1>
-            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-widest self-start mt-1"
+            <span className=" py-0.5 rounded-md text-[10px] font-bold uppercase tracking-widest self-start mt-1"
               style={{ background: "rgba(151,203,220,0.12)", border: "1px solid rgba(151,203,220,0.28)", color: "#97CBDC" }}>
               beta
             </span>
