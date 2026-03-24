@@ -495,7 +495,7 @@ import '@zentrafi/terminal/dist/style.css'
             Looking for more in-depth integration with Zentra X Swap Aggregator?
           </p>
           <a
-            href="https://docs.zentrafi.xyz"
+            href="https://docs.zentrafi.xyz/products/zentrafi-terminal"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 hover:opacity-90 hover:scale-105 active:scale-95 cursor-pointer"

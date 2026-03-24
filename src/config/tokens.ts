@@ -46,7 +46,7 @@ export const TOKEN_LIST: Record<number, TokenConfig[]> = {
       name: "Pharos",
       address: "NATIVE",
       decimals: 18,
-      icon: "https://raw.githubusercontent.com/Zentra-Finance/assets/main/pharos-chain.png",
+      icon: "/Pharos-chain.jpg",
       chainId: PHAROS_CHAIN_ID,
     },
     {
@@ -54,7 +54,7 @@ export const TOKEN_LIST: Record<number, TokenConfig[]> = {
       name: "Wrapped Pharos",
       address: "0x838800b758277CC111B2d48Ab01e5E164f8E9471",
       decimals: 18,
-      icon: "https://raw.githubusercontent.com/Zentra-Finance/assets/main/pharos-chain.png",
+      icon: "/Pharos-chain.jpg",
       chainId: PHAROS_CHAIN_ID,
     },
     {
@@ -78,7 +78,7 @@ export const TOKEN_LIST: Record<number, TokenConfig[]> = {
       name: "Wrapped Ethereum",
       address: "0x7d211f77525ea39a0592794f793cc1036eeaccd5",
       decimals: 18,
-      icon: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2/logo.png",
+      icon: "/weth-token.jpg",
       chainId: PHAROS_CHAIN_ID,
     },
   ],

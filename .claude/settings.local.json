@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(pkill -f \"node.*next\")",
+      "Bash(pkill -f \"serve\")",
+      "Bash(npm run:*)",
+      "Bash(tasklist)",
+      "Bash(cd:*)",
+      "Bash(npx tsc:*)",
+      "WebFetch(domain:cetus-1.gitbook.io)"
+    ]
+  }
+}

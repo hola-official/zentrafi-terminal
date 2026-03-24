@@ -1,6 +1,9 @@
 {
   "name": "@zentrafi/terminal",
   "version": "0.1.0",
+  "publishConfig": {
+    "access": "public"
+  },
   "description": "Embeddable swap terminal for ZentraFi on Pharos EVM",
   "license": "MIT",
   "author": "ZentraFi",
@@ -15,10 +18,9 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/Zentra-Finance/zentrafi-terminal.git"
+    "url": "https://github.com/hola-official/zentrafi-terminal.git"
   },
   "homepage": "https://x.zentrafi.xyz",
-  "private": false,
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
