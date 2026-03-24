@@ -216,32 +216,7 @@ import '@zentrafi/terminal/dist/style.css'
       </div>
 
       {/* ── Header ──────────────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-40 backdrop-blur-xl px-4 sm:px-6 py-3.5 flex items-center justify-between"
-        style={{ background: "rgba(6,9,16,0.75)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-        <ZentraLogoAnimated showTagline={false} size="sm" />
-        <div className="flex items-center gap-1 sm:gap-2">
-          {/* Social icon links — hidden on mobile, visible sm+ */}
-          <div className="hidden sm:flex items-center gap-1">
-            {[
-              { href: "https://x.com/zentrafi", icon: <XIcon className="w-4 h-4" />, title: "X (Twitter)" },
-              { href: "https://github.com/Zentra-Finance/zentrafi-terminal", icon: <GitHubIcon className="w-4 h-4" />, title: "GitHub" },
-              { href: "https://t.me/zentrafi", icon: <TelegramIcon className="w-4 h-4" />, title: "Telegram" },
-              { href: "https://discord.com/invite/rW7VJ8JjbC", icon: <DiscordIcon className="w-4 h-4" />, title: "Discord" },
-            ].map(({ href, icon, title }) => (
-              <a key={title} href={href} target="_blank" rel="noopener noreferrer" title={title}
-                className="w-8 h-8 flex items-center justify-center rounded-lg transition-all duration-200 text-white/35 hover:text-white/80 hover:bg-white/[0.06]">
-                {icon}
-              </a>
-            ))}
-            <div className="w-px h-5 mx-1" style={{ background: "rgba(255,255,255,0.08)" }} />
-          </div>
-          <a href="https://x.zentrafi.xyz" target="_blank" rel="noopener noreferrer"
-            className="px-3 sm:px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-200 hover:opacity-90 hover:scale-105 active:scale-95 whitespace-nowrap"
-            style={{ background: "linear-gradient(135deg, #97CBDC 0%, #018ABD 100%)", color: "#0a0f1a" }}>
-            Launch App
-          </a>
-        </div>
-      </header>
+      <NavBar />
 
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-10 flex flex-col gap-10">
 
@@ -515,14 +490,18 @@ import '@zentrafi/terminal/dist/style.css'
         </section> */}
 
         {/* ── Footer ─────────────────────────────────────────────────────────── */}
-        <footer className="pt-6 pb-2 text-center" style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
-          <p className="text-white/22 text-xs">
-            Built by{" "}
-            <a href="https://x.zentrafi.xyz" target="_blank" rel="noopener noreferrer"
-              className="text-[#97CBDC]/50 hover:text-[#97CBDC] transition-colors duration-200">
-              ZentraFi
+        <footer className="pt-8 pb-4 text-center flex flex-col items-center gap-2" style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+          <p className="text-white/45 text-sm max-w-md leading-relaxed">
+            Looking for more in-depth integration with Zentra X Swap Aggregator?
+          </p>
+          <p className="text-white/30 text-sm">
+            Check{" "}
+            <a href="https://docs.zentrafi.xyz" target="_blank" rel="noopener noreferrer"
+              className="font-semibold transition-colors duration-200"
+              style={{ color: "#97CBDC" }}>
+              docs.zentrafi.xyz
             </a>
-            {" "}· Pharos EVM DEX Terminal
+            {" "}to learn more.
           </p>
         </footer>
       </div>
@@ -536,6 +515,88 @@ import '@zentrafi/terminal/dist/style.css'
 }
 
 // ── Animated title ────────────────────────────────────────────────────────────
+
+// ── NavBar ────────────────────────────────────────────────────────────────────
+
+const SOCIAL_LINKS = [
+  { href: "https://x.com/zentrafi", icon: <XIcon className="w-4 h-4" />, title: "X (Twitter)" },
+  { href: "https://github.com/Zentra-Finance/zentrafi-terminal", icon: <GitHubIcon className="w-4 h-4" />, title: "GitHub" },
+  { href: "https://t.me/zentrafi", icon: <TelegramIcon className="w-4 h-4" />, title: "Telegram" },
+  { href: "https://discord.com/invite/rW7VJ8JjbC", icon: <DiscordIcon className="w-4 h-4" />, title: "Discord" },
+]
+
+function NavBar() {
+  const [menuOpen, setMenuOpen] = useState(false)
+
+  return (
+    <header className="sticky top-0 z-40 backdrop-blur-xl"
+      style={{ background: "rgba(6,9,16,0.75)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+      {/* Main row */}
+      <div className="px-4 sm:px-6 py-3.5 flex items-center justify-between">
+        <ZentraLogoAnimated showTagline={false} size="sm" />
+
+        <div className="flex items-center gap-1 sm:gap-2">
+          {/* Social links — desktop only */}
+          <div className="hidden sm:flex items-center gap-1">
+            {SOCIAL_LINKS.map(({ href, icon, title }) => (
+              <a key={title} href={href} target="_blank" rel="noopener noreferrer" title={title}
+                className="w-8 h-8 flex items-center justify-center rounded-lg transition-all duration-200 text-white/35 hover:text-white/80 hover:bg-white/[0.06]">
+                {icon}
+              </a>
+            ))}
+            <div className="w-px h-5 mx-1" style={{ background: "rgba(255,255,255,0.08)" }} />
+          </div>
+
+          {/* Launch App — always visible */}
+          <a href="https://x.zentrafi.xyz" target="_blank" rel="noopener noreferrer"
+            className="px-3 sm:px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-200 hover:opacity-90 hover:scale-105 active:scale-95 whitespace-nowrap"
+            style={{ background: "linear-gradient(135deg, #97CBDC 0%, #018ABD 100%)", color: "#0a0f1a" }}>
+            Launch App
+          </a>
+
+          {/* Hamburger — mobile only */}
+          <button
+            type="button"
+            onClick={() => setMenuOpen(o => !o)}
+            className="sm:hidden w-8 h-8 flex flex-col items-center justify-center gap-1.5 rounded-lg transition-all duration-200 hover:bg-white/[0.06] cursor-pointer"
+            aria-label="Toggle menu"
+            aria-expanded={menuOpen}>
+            <span className={cn(
+              "block w-4.5 h-px rounded-full transition-all duration-200 origin-center",
+              menuOpen ? "rotate-45 translate-y-[3.5px]" : ""
+            )} style={{ background: "rgba(255,255,255,0.6)", width: 18 }} />
+            <span className={cn(
+              "block h-px rounded-full transition-all duration-200",
+              menuOpen ? "opacity-0 scale-x-0" : ""
+            )} style={{ background: "rgba(255,255,255,0.6)", width: 18 }} />
+            <span className={cn(
+              "block h-px rounded-full transition-all duration-200 origin-center",
+              menuOpen ? "-rotate-45 -translate-y-[3.5px]" : ""
+            )} style={{ background: "rgba(255,255,255,0.6)", width: 18 }} />
+          </button>
+        </div>
+      </div>
+
+      {/* Mobile dropdown */}
+      <div className={cn(
+        "sm:hidden overflow-hidden transition-all duration-300 ease-out",
+        menuOpen ? "max-h-32 opacity-100" : "max-h-0 opacity-0"
+      )}>
+        <div className="px-4 pb-3 pt-1 flex items-center justify-center gap-3"
+          style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+          {SOCIAL_LINKS.map(({ href, icon, title }) => (
+            <a key={title} href={href} target="_blank" rel="noopener noreferrer" title={title}
+              className="w-10 h-10 flex items-center justify-center rounded-xl transition-all duration-200 text-white/45 hover:text-white/90 hover:bg-white/[0.07]">
+              {icon}
+            </a>
+          ))}
+        </div>
+      </div>
+    </header>
+  )
+}
+
+// ── Hero title animation ───────────────────────────────────────────────────────
 
 const HERO_TITLES = ["ZentraFi Terminal", "Swap Aggregator", "DeFi Gateway", "Pharos DEX Embed"]
 const SCRAMBLE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%&*"
