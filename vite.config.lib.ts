@@ -34,8 +34,13 @@ export default defineConfig({
         "viem",
         "@tanstack/react-query",
         "@rainbow-me/rainbowkit",
-        /^@rainbow-me\/rainbowkit\/.*/,
+        // Externalize JS sub-paths (e.g. /wallets) but let CSS be bundled into dist/styles.css
+        // so consumers don't need @rainbow-me/rainbowkit just to load styles.
+        /^@rainbow-me\/rainbowkit\/(?!.*\.css).*/,
         /^@zentrafi\/.*/,
+        // next is a dev/demo dependency only — never bundle it into the lib
+        "next",
+        /^next\/.*/,
       ],
       output: {
         assetFileNames: "styles.css",

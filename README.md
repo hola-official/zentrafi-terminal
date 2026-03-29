@@ -197,6 +197,7 @@ Pre-select the tokens shown when the terminal first loads:
 
 ---
 
+<!--
 ## Vanilla JS / CDN (no build step)
 
 Include the styles and script from the CDN, then call `window.ZentraX.init()`.
@@ -246,6 +247,8 @@ window.ZentraX.destroy("zentra-terminal")
 // Destroy all instances
 window.ZentraX.destroy()
 ```
+
+-->
 
 ---
 

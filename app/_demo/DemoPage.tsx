@@ -10,29 +10,29 @@ const PROJECT_ID = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? "your_pro
 
 // ── Default theme values ──────────────────────────────────────────────────────
 const DEFAULT_DARK: Required<TerminalTheme> = {
-  bg_primary:   "#0a0f1a",
-  primary:      "#97CBDC",
-  text_primary: "#FFFFFF",
-  text_secondary:"#6b7280",
-  success:      "#4ade80",
-  warning:      "#fbbf24",
-  error:        "#f87171",
-  btn_text:     "#0a0f1a",
-  bg_overlay:   "rgba(10,15,26,0.85)",
-  border:       "#475B74",
+  bg_primary:    "#0a0f1a",
+  primary:       "#97CBDC",
+  text_primary:  "#FFFFFF",
+  text_secondary:"rgba(151,203,220,0.50)",
+  success:       "#4ade80",
+  warning:       "#fbbf24",
+  error:         "#f87171",
+  btn_text:      "#0a0f1a",
+  bg_overlay:    "rgba(10,15,26,0.85)",
+  border:        "#475B74",
 }
 
 const DEFAULT_LIGHT: Required<TerminalTheme> = {
-  bg_primary:   "#ffffff",
-  primary:      "#0ea5c9",
-  text_primary: "#111827",
-  text_secondary:"#6b7280",
-  success:      "#16a34a",
-  warning:      "#d97706",
-  error:        "#dc2626",
-  btn_text:     "#ffffff",
-  bg_overlay:   "rgba(0,0,0,0.4)",
-  border:       "rgba(0,0,0,0.1)",
+  bg_primary:    "#ffffff",
+  primary:       "#018ABD",
+  text_primary:  "#111827",
+  text_secondary:"#475B74",
+  success:       "#16a34a",
+  warning:       "#d97706",
+  error:         "#dc2626",
+  btn_text:      "#ffffff",
+  bg_overlay:    "rgba(0,0,0,0.4)",
+  border:        "rgba(71,91,116,0.25)",
 }
 
 const SLIPPAGE_OPTIONS = [0.1, 0.5, 1.0]
@@ -150,35 +150,61 @@ export function DemoPage() {
     setThemeColors((prev) => ({ ...prev, [key]: value }))
   }
 
+  const themeJson = JSON.stringify(themeColors, null, 4)
+    .split("\n")
+    .map((l, i) => i === 0 ? l : "  " + l)
+    .join("\n")
+
   const npmSnippet = `import { ZentraTerminal } from '@zentrafi/terminal'
-import '@zentrafi/terminal/dist/style.css'
+import '@zentrafi/terminal/styles'
 
 <ZentraTerminal initProps={{
+
+  // ── Display ──────────────────────────────────────────
+  // "Integrated" | "Modal" | "Widget"
   displayMode: "${mode}",
+
+  // ── Theme ────────────────────────────────────────────
+  // "Dark" | "Light"
   themeType: "${themeType}",
-  theme: ${JSON.stringify(themeColors, null, 4).replace(/"/g, '"')},
+  // Fine-grained color overrides (all fields optional)
+  theme: ${themeJson},
+
+  // ── Wallet ───────────────────────────────────────────
+  // true  → terminal manages its own wallet connection
+  // false → reuses host dApp's wagmi/RainbowKit context
   independentWallet: ${independentWallet},
-  initialSlippage: ${slippage},${logoUrl ? `\n  logoUrl: "${logoUrl}",` : ""}
-  walletConnectProjectId: "YOUR_PROJECT_ID",
+  walletConnectProjectId: "YOUR_WALLETCONNECT_PROJECT_ID",
+  // App name shown in wallet connection dialogs
+  appName: "My dApp",
+
+  // ── Token defaults ───────────────────────────────────
+  // Accepts token symbol ("PHRS", "USDC") or address ("0x..." / "NATIVE")
+  defaultPair: { from: "PHRS", to: "USDC" },
+  // Slippage tolerance in percent (e.g. 0.5 = 0.5%)
+  initialSlippage: ${slippage},
+
+  // ── Widget options (displayMode: "Widget" only) ───────
+  // "bottom-right" | "bottom-left" | "top-right" | "top-left"
+  widgetPosition: "${widgetPosition}",
+  // "default" | "small"
+  widgetSize: "${widgetSize}",
+
+  // ── Branding ─────────────────────────────────────────
+  // Show "Powered by ZentraFi" footer
+  showBranding: ${showBranding},
+  // Custom logo URL (replaces default ZentraFi icon on FAB / Modal trigger)${logoUrl ? `\n  logoUrl: "${logoUrl}",` : "\n  // logoUrl: \"https://your-domain.com/logo.png\","}
+
+  // ── Callbacks ────────────────────────────────────────
+  onSwapSuccess: (txHash) => console.log("Swap succeeded:", txHash),
+  onError: (error) => console.error("Swap error:", error),
+
 }} />`
 
-  const htmlSnippet = `<!-- In your <head> -->
-<link rel="stylesheet" href="https://cdn.zentrafi.xyz/terminal/style.css">
-<script src="https://cdn.zentrafi.xyz/terminal/main.js"></script>
-
-<!-- In your <body> -->
-<div id="zentra-terminal"></div>
-<script>
-  window.ZentraX.init({
-    containerId: "zentra-terminal",
-    displayMode: "${mode}",
-    themeType: "${themeType}",
-    theme: ${JSON.stringify(themeColors, null, 6)},
-    independentWallet: ${independentWallet},
-    initialSlippage: ${slippage},
-    walletConnectProjectId: "YOUR_PROJECT_ID",
-  })
-</script>`
+  // const htmlSnippet = `<!-- In your <head> -->
+  // <link rel="stylesheet" href="https://cdn.zentrafi.xyz/terminal/style.css">
+  // <script src="https://cdn.zentrafi.xyz/terminal/main.js"></script>
+  // ...`
 
   const colorFields: Array<{ key: keyof Required<TerminalTheme>; label: string }> = [
     { key: "bg_primary",    label: "Panel BG" },
@@ -246,7 +272,7 @@ import '@zentrafi/terminal/dist/style.css'
         <section className="flex flex-col lg:flex-row gap-5">
 
           {/* ── Left: config panel ─────────────────────────────────────────── */}
-          <div className="flex flex-col gap-3 w-full lg:w-72 xl:w-80 shrink-0">
+          <div className="flex flex-col gap-3 w-full lg:w-72 xl:w-80 shrink-0 order-2 lg:order-1">
 
             {/* Display Mode */}
             <GlassCard title="Display Mode">
@@ -362,7 +388,7 @@ import '@zentrafi/terminal/dist/style.css'
           </div>
 
           {/* ── Right: preview + code ───────────────────────────────────────── */}
-          <div className="flex-1 flex flex-col gap-5 min-w-0">
+          <div className="flex-1 flex flex-col gap-5 min-w-0 order-1 lg:order-2">
 
             {/* Live preview window */}
             <div className="rounded-2xl overflow-hidden"
@@ -408,22 +434,38 @@ import '@zentrafi/terminal/dist/style.css'
                 <div className="relative z-10 w-full flex items-center justify-center">
                   {mode === "Integrated" && (
                     <div className="w-full max-w-sm">
-                      <ZentraTerminal initProps={{ displayMode: "Integrated", themeType, theme: themeColors, independentWallet, initialSlippage: slippage, showBranding, logoUrl: logoUrl || undefined, walletConnectProjectId: PROJECT_ID }} />
+                      {independentWallet
+                        ? <ZentraTerminal initProps={{ displayMode: "Integrated", themeType, theme: themeColors, independentWallet, initialSlippage: slippage, showBranding, logoUrl: logoUrl || undefined, walletConnectProjectId: PROJECT_ID }} />
+                        : <MockSwapPreview themeColors={themeColors} themeType={themeType} />
+                      }
                     </div>
                   )}
                   {mode === "Modal" && (
                     <div className="flex flex-col items-center gap-3">
-                      <p className="text-white/30 text-xs text-center">
-                        Click the logo to open the full-screen ZentraFi Swap Modal
-                      </p>
-                      <ZentraTerminal initProps={{ displayMode: "Modal", themeType, theme: themeColors, independentWallet, initialSlippage: slippage, showBranding, logoUrl: logoUrl || undefined, walletConnectProjectId: PROJECT_ID }} />
+                      {independentWallet ? (
+                        <>
+                          <p className="text-white/30 text-xs text-center">
+                            Click the logo to open the full-screen ZentraFi Swap Modal
+                          </p>
+                          <ZentraTerminal initProps={{ displayMode: "Modal", themeType, theme: themeColors, independentWallet, initialSlippage: slippage, showBranding, logoUrl: logoUrl || undefined, walletConnectProjectId: PROJECT_ID }} />
+                        </>
+                      ) : (
+                        <div className="flex flex-col items-center gap-4">
+                          <p className="text-white/30 text-xs text-center">
+                            Modal preview — terminal uses your dApp&apos;s wallet connection
+                          </p>
+                          <MockSwapPreview themeColors={themeColors} themeType={themeType} />
+                        </div>
+                      )}
                     </div>
                   )}
                   {mode === "Widget" && (
                     <div className="relative w-full" style={{ minHeight: 300 }}>
                       {/* Instruction */}
                       <p className="text-white/25 text-[11px] text-center mb-4">
-                        Click the arrows to position the widget · the live button is active on this page
+                        {independentWallet
+                          ? "Click the arrows to position the widget · the live button is active on this page"
+                          : "Widget simulation — terminal uses your dApp's wallet connection"}
                       </p>
                       {/* Arrow + corner selector box */}
                       <div className="relative w-full rounded-xl" style={{ height: 240, border: "1px dashed rgba(255,255,255,0.1)" }}>
@@ -432,21 +474,28 @@ import '@zentrafi/terminal/dist/style.css'
                         <CornerArrow pos="top-right"    active={widgetPosition === "top-right"}    onClick={() => setWidgetPosition("top-right")} />
                         <CornerArrow pos="bottom-left"  active={widgetPosition === "bottom-left"}  onClick={() => setWidgetPosition("bottom-left")} />
                         <CornerArrow pos="bottom-right" active={widgetPosition === "bottom-right"} onClick={() => setWidgetPosition("bottom-right")} />
-                        {/* Static FAB preview at selected corner */}
-                        <div className={cn("absolute w-14 h-14 rounded-full pointer-events-none overflow-hidden", {
-                          "top-2 left-2": widgetPosition === "top-left",
-                          "top-2 right-2": widgetPosition === "top-right",
-                          "bottom-2 left-2": widgetPosition === "bottom-left",
-                          "bottom-2 right-2": widgetPosition === "bottom-right",
-                        })} style={{ boxShadow: "0 4px 20px rgba(151,203,220,0.35)", border: "2px solid rgba(151,203,220,0.5)" }}>
-                          <img src={logoUrl || "/zentra-mascot.png"} alt="Widget preview" className="w-full h-full object-cover" />
-                        </div>
+                        {/* Mock FAB in selected corner when host dApp wallet mode */}
+                        {!independentWallet && (
+                          <div className={cn("absolute w-12 h-12 rounded-full flex items-center justify-center pointer-events-none", {
+                            "top-2 left-2": widgetPosition === "top-left",
+                            "top-2 right-2": widgetPosition === "top-right",
+                            "bottom-2 left-2": widgetPosition === "bottom-left",
+                            "bottom-2 right-2": widgetPosition === "bottom-right",
+                          })}
+                            style={{ background: `linear-gradient(135deg, ${themeColors.primary}, ${themeColors.primary}bb)`, boxShadow: `0 4px 20px ${themeColors.primary}50` }}>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={themeColors.btn_text} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4" />
+                            </svg>
+                          </div>
+                        )}
                         {/* Center label */}
                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-8">
                           <p className="text-white/25 text-xs text-center leading-relaxed">
-                            Click on the arrows to see how the ZentraFi Widget will appear on your web browser.
-                            <br />
-                            Click on the live logo button on the page to open the swap.
+                            {independentWallet ? (
+                              <>Click on the arrows to see how the ZentraFi Widget will appear on your web browser.<br />Click on the live logo button on the page to open the swap.</>
+                            ) : (
+                              <>Widget FAB will appear in the selected corner.<br />Wallet state is managed by your dApp.</>
+                            )}
                           </p>
                         </div>
                       </div>
@@ -457,7 +506,7 @@ import '@zentrafi/terminal/dist/style.css'
             </div>
 
             {/* Code block */}
-            <CodeTabs npmSnippet={npmSnippet} htmlSnippet={htmlSnippet} />
+            <CodeTabs npmSnippet={npmSnippet} />
           </div>
         </section>
 
@@ -511,9 +560,99 @@ import '@zentrafi/terminal/dist/style.css'
       </div>
 
       {/* ── Widget renders at page level (position:fixed FAB, no transform) ─── */}
-      {mode === "Widget" && (
+      {mode === "Widget" && independentWallet && (
         <ZentraTerminal initProps={{ displayMode: "Widget", themeType, theme: themeColors, independentWallet, initialSlippage: slippage, showBranding, widgetPosition, widgetSize, logoUrl: logoUrl || undefined, walletConnectProjectId: PROJECT_ID }} />
       )}
+    </div>
+  )
+}
+
+// ── Mock swap preview (independentWallet=false simulation) ───────────────────
+
+function MockSwapPreview({ themeColors, themeType }: { themeColors: Required<TerminalTheme>; themeType: "Dark" | "Light" }) {
+  const isDark = themeType === "Dark"
+  const inputBg = isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)"
+  const inputBorder = isDark ? "rgba(255,255,255,0.08)" : themeColors.border
+
+  return (
+    <div className="w-full flex flex-col gap-3 rounded-2xl p-4" style={{ background: themeColors.bg_primary, maxWidth: 400 }}>
+      {/* Header */}
+      <div className="flex items-center justify-between pb-1">
+        <span className="text-sm font-semibold" style={{ color: themeColors.text_primary }}>Swap</span>
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs" style={{ background: inputBg, color: themeColors.text_secondary, border: `1px solid ${inputBorder}` }}>
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.5"/><path d="M8 5v3.5l2 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+          0.5%
+        </div>
+      </div>
+
+      {/* From token box */}
+      <div className="rounded-2xl p-4 flex flex-col gap-2" style={{ background: inputBg, border: `1px solid ${inputBorder}` }}>
+        <div className="flex justify-between items-center">
+          <span className="text-xs" style={{ color: themeColors.text_secondary }}>From</span>
+          <span className="text-xs" style={{ color: themeColors.text_secondary }}>Balance: —</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0"
+            style={{ background: `${themeColors.primary}22`, color: themeColors.primary, border: `1px solid ${themeColors.primary}44` }}>
+            P
+          </div>
+          <div className="flex flex-col flex-1">
+            <span className="text-base font-semibold" style={{ color: themeColors.text_primary }}>0.0</span>
+          </div>
+          <div className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-sm font-semibold shrink-0"
+            style={{ background: `${themeColors.primary}15`, color: themeColors.primary, border: `1px solid ${themeColors.primary}30` }}>
+            PHRS
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" className="ml-0.5"><path d="M4 6l4 4 4-4"/></svg>
+          </div>
+        </div>
+      </div>
+
+      {/* Swap arrow */}
+      <div className="flex justify-center -my-1">
+        <div className="w-8 h-8 rounded-full flex items-center justify-center"
+          style={{ background: inputBg, border: `1px solid ${inputBorder}`, color: themeColors.text_secondary }}>
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="M8 3v10M5 10l3 3 3-3"/>
+          </svg>
+        </div>
+      </div>
+
+      {/* To token box */}
+      <div className="rounded-2xl p-4 flex flex-col gap-2" style={{ background: inputBg, border: `1px solid ${inputBorder}` }}>
+        <div className="flex justify-between items-center">
+          <span className="text-xs" style={{ color: themeColors.text_secondary }}>To</span>
+          <span className="text-xs" style={{ color: themeColors.text_secondary }}>Balance: —</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0"
+            style={{ background: `${themeColors.primary}22`, color: themeColors.primary, border: `1px solid ${themeColors.primary}44` }}>
+            U
+          </div>
+          <div className="flex flex-col flex-1">
+            <span className="text-base font-semibold" style={{ color: themeColors.text_secondary }}>—</span>
+          </div>
+          <div className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-sm font-semibold shrink-0"
+            style={{ background: `${themeColors.primary}15`, color: themeColors.primary, border: `1px solid ${themeColors.primary}30` }}>
+            USDC
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" className="ml-0.5"><path d="M4 6l4 4 4-4"/></svg>
+          </div>
+        </div>
+      </div>
+
+      {/* Connect Wallet button */}
+      <button
+        type="button"
+        disabled
+        className="w-full py-3 rounded-xl font-semibold text-sm cursor-default"
+        style={{ background: `linear-gradient(135deg, ${themeColors.primary}, ${themeColors.primary}cc)`, color: themeColors.btn_text }}
+      >
+        Connect Wallet
+      </button>
+
+      {/* Host wallet note */}
+      <p className="text-center text-[10px] leading-relaxed" style={{ color: themeColors.text_secondary }}>
+        Terminal will use your dApp&apos;s wallet connection
+      </p>
     </div>
   )
 }
@@ -736,11 +875,10 @@ function Toggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
   )
 }
 
-function CodeTabs({ npmSnippet, htmlSnippet }: { npmSnippet: string; htmlSnippet: string }) {
-  const [tab, setTab] = useState<"npm" | "html">("npm")
+function CodeTabs({ npmSnippet }: { npmSnippet: string }) {
   const [copied, setCopied] = useState(false)
 
-  const code = tab === "npm" ? npmSnippet : htmlSnippet
+  const code = npmSnippet
   const copy = () => {
     navigator.clipboard.writeText(code).then(() => {
       setCopied(true)
@@ -763,13 +901,10 @@ function CodeTabs({ npmSnippet, htmlSnippet }: { npmSnippet: string; htmlSnippet
             <div className="w-2.5 h-2.5 rounded-full bg-[#28c840]" />
           </div>
           {/* Tabs */}
-          {(["npm", "html"] as const).map((t) => (
-            <button key={t} onClick={() => setTab(t)}
-              className={cn("px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all duration-200",
-                tab === t ? "bg-[#97CBDC]/12 text-[#97CBDC]" : "text-white/30 hover:text-white/55")}>
-              {t === "npm" ? "NPM · React" : "Script Tag · HTML"}
-            </button>
-          ))}
+          <button
+            className="px-3 py-1.5 rounded-lg text-[11px] font-medium bg-[#97CBDC]/12 text-[#97CBDC]">
+            Implementation
+          </button>
         </div>
         {/* Copy button */}
         <button onClick={copy}

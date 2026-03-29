@@ -6,7 +6,7 @@ import { Toaster } from "sonner"
 import { SwapWidget } from "@terminal/components/SwapWidget"
 import { TerminalProviders } from "@terminal/components/TerminalProviders"
 import { ThemeProvider, useTerminalTheme } from "@terminal/theme/ThemeProvider"
-import { ZentraLogo } from "@terminal/components/ZentraLogo"
+import { ZentraLogoAnimated } from "@terminal/components/zentraFi-logo-animated"
 import { getTokenList } from "@terminal/config/tokens"
 import { PHAROS_CHAIN_ID } from "@terminal/config/tokens"
 import { cn } from "@terminal/utils/cn"
@@ -60,22 +60,15 @@ export function ZentraTerminal({ initProps = {}, displayMode: displayModeProp }:
 
   const defaultFromToken = resolveTokenAddress(defaultPair?.from) ?? "NATIVE"
   const defaultToToken =
-    resolveTokenAddress(defaultPair?.to) ?? "0xE0BE08c77f415F577A1B3A9aD7a1Df1479564ec8"
+    resolveTokenAddress(defaultPair?.to) ?? "0xE7E84B8B4f39C507499c40B4ac199B050e2882d5"
   const defaultSlippageBps = initialSlippage != null ? Math.round(initialSlippage * 100) : 50
 
   const widgetConfig = { defaultFromToken, defaultToToken, defaultSlippageBps, onSwapSuccess, onError }
 
-  // Skip SSR — the swap widget is entirely client-side (wallet, prices, wagmi)
+  // Mount guard for SSR-safe rendering — but TerminalProviders mounts immediately
+  // so wagmi begins reconnecting from localStorage before the user can open the widget
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
-
-  if (!mounted) {
-    return (
-      <ThemeProvider themeType={themeType} theme={theme}>
-        <MountSkeleton mode={mode} widgetPosition={widgetPosition} widgetSize={widgetSize} />
-      </ThemeProvider>
-    )
-  }
 
   return (
     <ThemeProvider themeType={themeType} theme={theme}>
@@ -85,14 +78,18 @@ export function ZentraTerminal({ initProps = {}, displayMode: displayModeProp }:
         independentWallet={independentWallet}
       >
         <Toaster position="top-right" richColors theme={themeType === "Light" ? "light" : "dark"} />
-        <TerminalRenderer
-          mode={mode}
-          widgetPosition={widgetPosition}
-          widgetSize={widgetSize}
-          showBranding={showBranding}
-          logoUrl={logoUrl}
-          widgetConfig={widgetConfig}
-        />
+        {!mounted ? (
+          <MountSkeleton mode={mode} widgetPosition={widgetPosition} widgetSize={widgetSize} />
+        ) : (
+          <TerminalRenderer
+            mode={mode}
+            widgetPosition={widgetPosition}
+            widgetSize={widgetSize}
+            showBranding={showBranding}
+            logoUrl={logoUrl}
+            widgetConfig={widgetConfig}
+          />
+        )}
       </TerminalProviders>
     </ThemeProvider>
   )
@@ -113,6 +110,11 @@ function TerminalRenderer({ mode, widgetPosition, widgetSize, showBranding, logo
   const [open, setOpen] = useState(false)
   const { theme } = useTerminalTheme()
 
+  const isZentrafiDomain =
+    typeof window !== "undefined" &&
+    (window.location.hostname === "x.zentrafi.xyz" ||
+      window.location.hostname === "atlantic.zentrafi.xyz")
+
   const panelWidth = widgetSize === "small" ? "w-[340px]" : "w-[400px]"
   const panelMaxWidth = widgetSize === "small" ? "max-w-[340px]" : "max-w-[400px]"
 
@@ -120,9 +122,7 @@ function TerminalRenderer({ mode, widgetPosition, widgetSize, showBranding, logo
   const panel = (
     <SwapPanel
       showBranding={showBranding}
-      logoUrl={logoUrl}
       widgetConfig={widgetConfig}
-      onClose={mode !== "Integrated" ? () => setOpen(false) : undefined}
     />
   )
 
@@ -176,7 +176,7 @@ function TerminalRenderer({ mode, widgetPosition, widgetSize, showBranding, logo
         <button
           type="button"
           onClick={() => setOpen(!open)}
-          style={{ background: theme.primary, color: theme.btn_text }}
+          style={(logoUrl || isZentrafiDomain) ? { background: theme.primary, color: theme.btn_text } : undefined}
           className={cn(
             "fixed z-[9999] w-14 h-14 rounded-full shadow-2xl flex items-center justify-center",
             "transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer",
@@ -184,13 +184,23 @@ function TerminalRenderer({ mode, widgetPosition, widgetSize, showBranding, logo
           )}
           title="Open ZentraFi Swap"
         >
-          <span className={cn("absolute inset-0 rounded-full flex items-center justify-center transition-all duration-200",
-            open ? "opacity-100 scale-100" : "opacity-0 scale-75")}>
+          {/* Close chevron — carries its own background when the logo is animated */}
+          <span
+            className={cn("absolute inset-0 rounded-full flex items-center justify-center transition-all duration-200",
+              open ? "opacity-100 scale-100" : "opacity-0 scale-75")}
+            style={(!logoUrl && !isZentrafiDomain) ? { background: theme.primary, color: theme.btn_text } : undefined}
+          >
             <ChevronDown className="w-6 h-6" />
           </span>
-          <span className={cn("absolute inset-0 rounded-full overflow-hidden transition-all duration-200",
-            open ? "opacity-0 scale-75" : "opacity-100 scale-100")}>
-            <img src={logoUrl || "/zentra-mascot.png"} alt="Logo" className="w-14 h-14 object-cover" />
+          {/* Logo */}
+          <span className={cn(
+            "absolute inset-0 rounded-full flex items-center justify-center overflow-hidden transition-all duration-200",
+            open ? "opacity-0 scale-75" : "opacity-100 scale-100"
+          )}>
+            {(logoUrl || isZentrafiDomain)
+              ? <img src={logoUrl || "/zentra-mascot.png"} alt="Logo" className="w-14 h-14 object-cover" />
+              : <ZentraLogoAnimated size={widgetSize === "small" ? "sm" : "md"} showLogoText={false} showTagline={false} />
+            }
           </span>
         </button>
       </>
@@ -249,59 +259,27 @@ function TerminalRenderer({ mode, widgetPosition, widgetSize, showBranding, logo
 function SwapPanel({
   widgetConfig,
   showBranding,
-  logoUrl,
-  onClose,
 }: {
   widgetConfig: Parameters<typeof SwapWidget>[0]
   showBranding: boolean
-  logoUrl?: string
-  onClose?: () => void
 }) {
   const { theme } = useTerminalTheme()
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Header row */}
-      <div className="flex items-center justify-between">
-        {/* {showBranding && (
-          <div className="flex items-center gap-1.5">
-            {logoUrl ? (
-              <img src={logoUrl} alt="Logo" className="w-5 h-5 rounded-full object-cover" />
-            ) : (
-              <ZentraLogo size={18} style={{ color: theme.primary }} />
-            )}
-            <span style={{ color: theme.text_secondary }} className="text-xs font-medium">
-              Powered by{" "}
-              <span style={{ color: theme.primary }} className="font-semibold">
-                ZentraFi
-              </span>
-            </span>
-          </div>
-        )} */}
-        {/* {onClose && (
-          <button
-            type="button"
-            onClick={onClose}
-            style={{ color: theme.text_secondary }}
-            className="ml-auto hover:opacity-70 transition-opacity"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        )} */}
-      </div>
-
       <SwapWidget {...widgetConfig} />
-      
-      <div className="flex items-center gap-1.5">
-          {/* <img src="/zentra-mascot.png" alt="ZentraFi Mascot" className="w-5 h-5 rounded full object-cover" /> */}
-          
-            <span style={{ color: theme.text_secondary }} className="text-xs font-medium">
-              Powered by{" "}
-              <span style={{ color: theme.primary }} className="font-semibold">
-                ZentraFi
-              </span>
+
+      {showBranding && (
+        <div className="flex items-center justify-center gap-2 pt-0.5">
+          <ZentraLogoAnimated size="xs" showLogoText={false} showTagline={false} />
+          <span style={{ color: theme.text_secondary }} className="text-xs font-medium">
+            Powered by{" "}
+            <span style={{ color: theme.primary }} className="font-semibold">
+              ZentraFi
             </span>
-          </div>
+          </span>
+        </div>
+      )}
     </div>
   )
 }

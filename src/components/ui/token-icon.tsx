@@ -1,6 +1,5 @@
 "use client"
 
-import Image from "next/image"
 import { useState, useEffect } from "react"
 import { cn } from "@terminal/utils/cn"
 
@@ -36,14 +35,14 @@ export function TokenIcon({ src, symbol, size = 24, className }: TokenIconProps)
   }
 
   return (
-    <Image
+    <img
       src={src}
       alt={symbol}
       width={size}
       height={size}
+      style={{ width: size, height: size }}
       className={cn("rounded-full object-cover", className)}
       onError={() => setImgError(true)}
-      unoptimized
     />
   )
 }

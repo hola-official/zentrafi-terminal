@@ -1,3 +1,6 @@
+// ── Styles (extracted to dist/styles.css by the lib build) ───────────────────
+import "./styles/terminal.css"
+
 // ── Main component ────────────────────────────────────────────────────────────
 export { ZentraTerminal } from "@terminal/components/ZentraTerminal"
 export type { ZentraTerminalProps } from "@terminal/components/ZentraTerminal"
@@ -10,6 +13,9 @@ export { TerminalProviders } from "@terminal/components/TerminalProviders"
 export type { TerminalProvidersConfig } from "@terminal/components/TerminalProviders"
 
 export { TokenSelector } from "@terminal/components/TokenSelector"
+export { SwapDetails } from "@terminal/components/SwapDetails"
+
+export { ZentraLogo, ZentraWordmark } from "@terminal/components/ZentraLogo"
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
 export { ThemeProvider, useTerminalTheme } from "@terminal/theme/ThemeProvider"

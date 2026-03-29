@@ -1,7 +1,7 @@
 "use client"
 
-import { type ReactNode, useRef, createContext, useContext, useEffect } from "react"
-import { WagmiProvider, createConfig, http, usePublicClient } from "wagmi"
+import { type ReactNode, createContext, useContext, useEffect } from "react"
+import { WagmiProvider, createConfig, createStorage, http, usePublicClient } from "wagmi"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { RainbowKitProvider, darkTheme, lightTheme, connectorsForWallets } from "@rainbow-me/rainbowkit"
 import {
@@ -29,6 +29,40 @@ export interface TerminalProvidersConfig {
 /** Context that child components can read to know if terminal owns the wallet */
 export const IndependentWalletContext = createContext(true)
 export const useIndependentWallet = () => useContext(IndependentWalletContext)
+
+// ── Stable module-level cache ─────────────────────────────────────────────────
+// wagmi config must never be re-created across React remounts — doing so drops
+// the reconnection state and forces the user to re-connect after every refresh.
+// Keying on projectId + appName lets multiple independent terminals coexist.
+
+const wagmiConfigCache = new Map<string, ReturnType<typeof createConfig>>()
+
+function getWagmiConfig(
+  walletConnectProjectId: string,
+  appName: string,
+): ReturnType<typeof createConfig> {
+  const key = `${walletConnectProjectId}::${appName}`
+  if (!wagmiConfigCache.has(key)) {
+    const wallets = [metaMaskWallet, okxWallet, bitgetWallet, coinbaseWallet]
+    if (walletConnectProjectId) wallets.push(walletConnectWallet)
+    const connectors = connectorsForWallets(
+      [{ groupName: "Recommended", wallets }],
+      { appName, projectId: walletConnectProjectId || "placeholder" },
+    )
+    wagmiConfigCache.set(
+      key,
+      createConfig({
+        connectors,
+        chains: [pharosTestnet],
+        transports: { [pharosTestnet.id]: http("https://atlantic.dplabs-internal.com") },
+        // Explicit localStorage storage so wagmi can reconnect after a page refresh
+        storage: createStorage({ storage: typeof window !== "undefined" ? window.localStorage : undefined as never }),
+        ssr: false,
+      }),
+    )
+  }
+  return wagmiConfigCache.get(key)!
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -112,24 +146,8 @@ export function TerminalProviders({
 }: TerminalProvidersConfig & { children: ReactNode }) {
   const { themeType, theme } = useTerminalTheme()
 
-  // Create config once — wagmiConfig must be stable (re-creating it causes context loss)
-  const wagmiConfigRef = useRef<ReturnType<typeof createConfig> | null>(null)
-  if (!wagmiConfigRef.current) {
-    const wallets = [metaMaskWallet, okxWallet, bitgetWallet, coinbaseWallet]
-    // Only include WalletConnect when a valid project ID is provided
-    if (walletConnectProjectId) wallets.push(walletConnectWallet)
-    const connectors = connectorsForWallets(
-      [{ groupName: "Recommended", wallets }],
-      { appName, projectId: walletConnectProjectId || "placeholder" }
-    )
-    wagmiConfigRef.current = createConfig({
-      connectors,
-      chains: [pharosTestnet],
-      transports: { [pharosTestnet.id]: http("https://atlantic.dplabs-internal.com") },
-      ssr: false,
-    })
-  }
-  const wagmiConfig = wagmiConfigRef.current
+  // Stable config from module-level cache — survives React remounts and page refreshes
+  const wagmiConfig = getWagmiConfig(walletConnectProjectId, appName)
 
   const rkTheme =
     themeType === "Light"

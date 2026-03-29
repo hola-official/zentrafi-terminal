@@ -1,29 +1,29 @@
 import type { TerminalTheme, ThemeType } from "@terminal/types"
 
 export const DARK_THEME: Required<TerminalTheme> = {
-  bg_primary: "#0a0f1a",
-  primary: "#97CBDC",
-  text_primary: "#FFFFFF",
-  text_secondary: "#6b7280",
-  success: "#4ade80",
-  warning: "#fbbf24",
-  error: "#f87171",
-  btn_text: "#0a0f1a",
-  bg_overlay: "rgba(10,15,26,0.85)",
-  border: "#475B74",
+  bg_primary:    "#0a0f1a",                 // dark navy — matches ZentraFi canvas bg
+  primary:       "#97CBDC",                 // ZentraFi primary cyan accent
+  text_primary:  "#FFFFFF",
+  text_secondary:"rgba(151,203,220,0.50)",  // muted #97CBDC — replaces generic gray
+  success:       "#4ade80",
+  warning:       "#fbbf24",
+  error:         "#f87171",
+  btn_text:      "#0a0f1a",                 // dark text on light #97CBDC buttons
+  bg_overlay:    "rgba(10,15,26,0.85)",
+  border:        "#475B74",                 // ZentraFi canonical border
 }
 
 export const LIGHT_THEME: Required<TerminalTheme> = {
-  bg_primary: "#ffffff",
-  primary: "#0ea5c9",
-  text_primary: "#111827",
-  text_secondary: "#6b7280",
-  success: "#16a34a",
-  warning: "#d97706",
-  error: "#dc2626",
-  btn_text: "#ffffff",
-  bg_overlay: "rgba(0,0,0,0.4)",
-  border: "rgba(0,0,0,0.1)",
+  bg_primary:    "#ffffff",
+  primary:       "#018ABD",                 // ZentraFi mid-blue (button gradient end)
+  text_primary:  "#111827",
+  text_secondary:"#475B74",                 // ZentraFi border color doubles as muted text in light
+  success:       "#16a34a",
+  warning:       "#d97706",
+  error:         "#dc2626",
+  btn_text:      "#ffffff",                 // white text on #018ABD button
+  bg_overlay:    "rgba(0,0,0,0.4)",
+  border:        "rgba(71,91,116,0.25)",    // #475B74 at reduced opacity for light mode
 }
 
 export function resolveTheme(
@@ -73,6 +73,7 @@ export function themeToCSSVars(theme: Required<TerminalTheme>): string {
     --zt-warning-20: ${mix(theme.warning, 20)};
     --zt-success-10: ${mix(theme.success, 10)};
     --zt-success-20: ${mix(theme.success, 20)};
-    --zt-primary-gradient: linear-gradient(135deg, ${theme.primary} 0%, color-mix(in srgb, ${theme.primary} 60%, #001850) 100%);
+    --zt-primary-gradient: linear-gradient(135deg, #004581 0%, #018ABD 100%);
+    --zt-primary-gradient-hover: linear-gradient(135deg, #003b6e 0%, #0179a3 100%);
   `.trim()
 }

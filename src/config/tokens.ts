@@ -1,4 +1,5 @@
 import { Token, ChainId } from "@zentrafi/sdk-core"
+import pharosChainLogo from "@terminal/assets/pharos-chain"
 
 export const PHAROS_CHAIN_ID = 688689 as const
 
@@ -46,7 +47,7 @@ export const TOKEN_LIST: Record<number, TokenConfig[]> = {
       name: "Pharos",
       address: "NATIVE",
       decimals: 18,
-      icon: "/Pharos-chain.jpg",
+      icon: pharosChainLogo,
       chainId: PHAROS_CHAIN_ID,
     },
     {
@@ -54,7 +55,7 @@ export const TOKEN_LIST: Record<number, TokenConfig[]> = {
       name: "Wrapped Pharos",
       address: "0x838800b758277CC111B2d48Ab01e5E164f8E9471",
       decimals: 18,
-      icon: "/Pharos-chain.jpg",
+      icon: pharosChainLogo,
       chainId: PHAROS_CHAIN_ID,
     },
     {
