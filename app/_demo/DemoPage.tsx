@@ -6,7 +6,7 @@ import { ZentraLogoAnimated } from "@terminal/components/zentraFi-logo-animated"
 import type { DisplayMode, ThemeType, TerminalTheme, WidgetPosition, WidgetSize } from "@terminal/types"
 import { cn } from "@terminal/utils/cn"
 
-const PROJECT_ID = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? "your_project_id_here"
+const PROJECT_ID = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || ""
 
 // ── Default theme values ──────────────────────────────────────────────────────
 const DEFAULT_DARK: Required<TerminalTheme> = {

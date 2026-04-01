@@ -93,6 +93,9 @@ export interface ZentraTerminalInitProps {
   /** Callback fired when a swap/approval fails (after user rejects or tx reverts) */
   onError?: (error: Error) => void
 
+  /** Override toast notifications — lets the host app route toasts through its own system */
+  onToast?: (opts: { title: string; description?: string; variant?: "default" | "success" | "info" | "error" }) => void
+
   /** Additional RPCs to add to the network config */
   rpcUrls?: RpcConfig[]
 }

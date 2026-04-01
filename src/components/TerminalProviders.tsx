@@ -2,6 +2,7 @@
 
 import { type ReactNode, createContext, useContext, useEffect } from "react"
 import { WagmiProvider, createConfig, createStorage, http, usePublicClient } from "wagmi"
+import { injected } from "wagmi/connectors"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { RainbowKitProvider, darkTheme, lightTheme, connectorsForWallets } from "@rainbow-me/rainbowkit"
 import {
@@ -37,18 +38,34 @@ export const useIndependentWallet = () => useContext(IndependentWalletContext)
 
 const wagmiConfigCache = new Map<string, ReturnType<typeof createConfig>>()
 
+// A real Reown/WalletConnect project ID never contains underscores or spaces.
+// Placeholder strings like "your_project_id_here" or an empty string are NOT valid.
+function isRealProjectId(id: string): boolean {
+  return id.length > 0 && !/[_\s]/.test(id)
+}
+
 function getWagmiConfig(
   walletConnectProjectId: string,
   appName: string,
 ): ReturnType<typeof createConfig> {
   const key = `${walletConnectProjectId}::${appName}`
   if (!wagmiConfigCache.has(key)) {
-    const wallets = [metaMaskWallet, okxWallet, bitgetWallet, coinbaseWallet]
-    if (walletConnectProjectId) wallets.push(walletConnectWallet)
-    const connectors = connectorsForWallets(
-      [{ groupName: "Recommended", wallets }],
-      { appName, projectId: walletConnectProjectId || "placeholder" },
-    )
+    // connectorsForWallets always calls the Reown config API — even if walletConnectWallet
+    // is not in the list — because it initialises app-level WalletConnect metadata.
+    // With an invalid/placeholder project ID that call returns 403 and the WalletConnect
+    // connector bundle can fail to initialise, breaking ALL connectors in the group
+    // (MetaMask, OKX, etc.) even though they don't need WalletConnect themselves.
+    //
+    // When there is no real project ID we fall back to wagmi's native injected() connector
+    // which has zero Reown/WalletConnect dependency and works for any injected wallet
+    // (MetaMask, OKX, Rabby, Coinbase, …).  RainbowKitProvider wraps it just fine.
+    const connectors = isRealProjectId(walletConnectProjectId)
+      ? connectorsForWallets(
+          [{ groupName: "Recommended", wallets: [metaMaskWallet, okxWallet, bitgetWallet, coinbaseWallet, walletConnectWallet] }],
+          { appName, projectId: walletConnectProjectId },
+        )
+      : [injected()]
+
     wagmiConfigCache.set(
       key,
       createConfig({
@@ -146,7 +163,22 @@ export function TerminalProviders({
 }: TerminalProvidersConfig & { children: ReactNode }) {
   const { themeType, theme } = useTerminalTheme()
 
-  // Stable config from module-level cache — survives React remounts and page refreshes
+  // When independentWallet=false, skip own providers entirely.
+  // Do NOT call getWagmiConfig here — creating connectors (MetaMask, OKX, etc.) even
+  // without mounting a WagmiProvider registers event listeners on window.ethereum that
+  // compete with the host dApp's connectors and corrupt wagmi's localStorage reconnect
+  // state, causing the host to ask the user to reconnect after every page reload.
+  if (!independentWallet) {
+    return (
+      <IndependentWalletContext.Provider value={false}>
+        <WagmiPresenceGuard />
+        {children}
+      </IndependentWalletContext.Provider>
+    )
+  }
+
+  // Independent wallet mode — create/reuse stable wagmi config from module-level cache.
+  // getWagmiConfig is NOT a hook so calling it after an early return is valid.
   const wagmiConfig = getWagmiConfig(walletConnectProjectId, appName)
 
   const rkTheme =
@@ -162,16 +194,6 @@ export function TerminalProviders({
           fontStack: "system",
           overlayBlur: "small",
         })
-
-  // When independentWallet=false, skip own providers (host dApp provides them)
-  if (!independentWallet) {
-    return (
-      <IndependentWalletContext.Provider value={false}>
-        <WagmiPresenceGuard />
-        {children}
-      </IndependentWalletContext.Provider>
-    )
-  }
 
   return (
     <IndependentWalletContext.Provider value={true}>

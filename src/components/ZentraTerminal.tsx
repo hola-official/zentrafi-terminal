@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
+import { setExternalToast } from "@terminal/utils/toast"
 import { ChevronDown } from "lucide-react"
 import { Toaster } from "sonner"
 import { SwapWidget } from "@terminal/components/SwapWidget"
@@ -44,7 +45,14 @@ export function ZentraTerminal({ initProps = {}, displayMode: displayModeProp }:
     logoUrl,
     onSwapSuccess,
     onError,
+    onToast,
   } = initProps
+
+  // Route terminal toasts through the host's system when provided
+  useEffect(() => {
+    setExternalToast(onToast ?? null)
+    return () => setExternalToast(null)
+  }, [onToast])
 
   const mode = displayModeProp ?? initDisplayMode
 
@@ -77,7 +85,11 @@ export function ZentraTerminal({ initProps = {}, displayMode: displayModeProp }:
         appName={appName}
         independentWallet={independentWallet}
       >
-        <Toaster position="top-right" richColors theme={themeType === "Light" ? "light" : "dark"} />
+        {/* Only mount our own Toaster in independent mode — in hosted mode the dApp
+            has its own Toaster; mounting a second one creates duplicate notifications. */}
+        {independentWallet && (
+          <Toaster position="top-right" richColors theme={themeType === "Light" ? "light" : "dark"} />
+        )}
         {!mounted ? (
           <MountSkeleton mode={mode} widgetPosition={widgetPosition} widgetSize={widgetSize} />
         ) : (
@@ -182,7 +194,6 @@ function TerminalRenderer({ mode, widgetPosition, widgetSize, showBranding, logo
             "transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer",
             positionClass
           )}
-          title="Open ZentraFi Swap"
         >
           {/* Close chevron — carries its own background when the logo is animated */}
           <span
@@ -210,19 +221,20 @@ function TerminalRenderer({ mode, widgetPosition, widgetSize, showBranding, logo
   // ── Modal ──────────────────────────────────────────────────────────────────
   return (
     <>
-      {/* Logo trigger button */}
+      {/* Trigger button — pill with optional logo image or animated Z icon */}
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="w-16 h-16 rounded-full overflow-hidden shadow-2xl transition-all duration-200 hover:scale-110 active:scale-95 ring-2 cursor-pointer"
-        style={{ boxShadow: `0 0 0 2px ${theme.primary}, 0 0 24px ${theme.primary}40` }}
+        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl shadow-lg transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer min-w-[8rem] justify-center"
+        style={{ background: theme.primary, color: theme.btn_text }}
         title="Open ZentraFi Swap"
       >
-        <img
-          src={logoUrl || "/zentra-mascot.png"}
-          alt="Open ZentraFi Swap"
-          className="w-full h-full object-cover"
-        />
+        {/* {logoUrl ? (
+          <img src={logoUrl} alt="Logo" className="w-5 h-5 rounded-full object-cover shrink-0" />
+        ) : (
+          <ZentraLogoAnimated size="xs" showLogoText={false} showTagline={false} />
+        )} */}
+        <span className="font-semibold text-sm">p</span>
       </button>
 
       {/* Modal overlay — always mounted, shown/hidden via CSS to preserve wallet state */}

@@ -1,12 +1,13 @@
 "use client"
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { useAccount, useChainId, useWaitForTransactionReceipt } from "wagmi"
 import { ConnectButton } from "@rainbow-me/rainbowkit"
 import {
   ArrowDown, ChevronDown, Settings, AlertTriangle,
 } from "lucide-react"
-import { toast } from "sonner"
+import { terminalToast as toast } from "@terminal/utils/toast"
 import { TokenSelector } from "@terminal/components/TokenSelector"
 import { TokenListPanel } from "@terminal/components/TokenListPanel"
 import { SettingsPanel } from "@terminal/components/SettingsPanel"
@@ -15,6 +16,7 @@ import { useSwap } from "@terminal/hooks/useSwap"
 import { useTokenApproval } from "@terminal/hooks/useTokenApproval"
 import { useWrapUnwrap } from "@terminal/hooks/useWrapUnwrap"
 import { useTokenBalance } from "@terminal/hooks/useTokenBalance"
+import { useIndependentWallet } from "@terminal/components/TerminalProviders"
 import {
   getTokenList, getSDKToken, getSDKTokens,
   PHAROS_CHAIN_ID, type TokenConfig,
@@ -72,9 +74,11 @@ export function SwapWidget({
   onError,
   className,
 }: SwapWidgetConfig) {
+  const isIndependent = useIndependentWallet()
   const wagmiChainId = useChainId()
   const chainId = wagmiChainId ?? PHAROS_CHAIN_ID
   const { address, isConnected } = useAccount()
+  const queryClient = useQueryClient()
   const [view, setView] = useState<View>("swap")
 
   const tokenList = useMemo(() => getTokenList(chainId), [chainId])
@@ -109,8 +113,8 @@ export function SwapWidget({
   const sdkFrom = useMemo(() => fromToken ? getSDKToken(fromToken.address, chainId) ?? null : null, [fromToken, chainId])
   const sdkTo = useMemo(() => toToken ? getSDKToken(toToken.address, chainId) ?? null : null, [toToken, chainId])
 
-  const { balance: fromBalance, refetch: refetchFrom } = useTokenBalance({ tokenAddress: fromToken?.address ?? null, userAddress: address, decimals: fromToken?.decimals ?? 18, chainId })
-  const { balance: toBalance, refetch: refetchTo } = useTokenBalance({ tokenAddress: toToken?.address ?? null, userAddress: address, decimals: toToken?.decimals ?? 18, chainId })
+  const { balance: fromBalance } = useTokenBalance({ tokenAddress: fromToken?.address ?? null, userAddress: address, decimals: fromToken?.decimals ?? 18, chainId })
+  const { balance: toBalance } = useTokenBalance({ tokenAddress: toToken?.address ?? null, userAddress: address, decimals: toToken?.decimals ?? 18, chainId })
 
   const { trade, outputAmount, executionPrice, priceImpact, tradingFee, isLoading: quoteLoading, error: quoteError } = useSwapQuote({
     inputToken: sdkFrom, outputToken: sdkTo, typedValue: debouncedAmount,
@@ -127,7 +131,7 @@ export function SwapWidget({
   })
 
   const { executeSwap, isSwapping, hash: swapHash } = useSwap(chainId)
-  const { isSuccess: isSwapConfirmed } = useWaitForTransactionReceipt({ hash: swapHash ?? undefined })
+  const { isSuccess: isSwapConfirmed, isLoading: isSwapPending } = useWaitForTransactionReceipt({ hash: swapHash ?? undefined })
   const { wrap, unwrap, isPending: isWrapPending, isConfirmed: isWrapConfirmed, hash: wrapHash } = useWrapUnwrap()
 
   // Countdown timer
@@ -150,10 +154,11 @@ export function SwapWidget({
       setLastProcessedHash(swapHash)
       toast.success("Swap Successful!", { description: `${snap.from} ${snap.fromSym} → ${snap.to} ${snap.toSym}` })
       setFromAmount(""); setToAmount("")
-      refetchFrom(); refetchTo()
+      void queryClient.invalidateQueries()
       onSwapSuccess?.(swapHash)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // fromAmount/toAmount/fromToken/toToken are intentionally snapshot-only
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSwapConfirmed, swapHash])
 
   useEffect(() => {
@@ -164,10 +169,11 @@ export function SwapWidget({
         description: `${fromAmount} ${fromToken?.symbol} → ${toAmount} ${toToken?.symbol}`,
       })
       setFromAmount(""); setToAmount("")
-      refetchFrom(); refetchTo()
+      void queryClient.invalidateQueries()
       onSwapSuccess?.(wrapHash)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // fromAmount/toAmount/fromToken/toToken are intentionally snapshot-only
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isWrapConfirmed, wrapHash])
 
   // Derived
@@ -178,7 +184,7 @@ export function SwapWidget({
   const hasInsufficientLiquidity = quoteError?.message?.includes("Insufficient liquidity")
   const priceImpactNum = parseFloat(priceImpact) || 0
   const isHighImpact = priceImpactNum >= 5
-  const isLoading = quoteLoading || isCheckingApproval || isApproving || isApprovalPending || isSwapping || isWrapPending
+  const isLoading = quoteLoading || isCheckingApproval || isApproving || isApprovalPending || isSwapping || isSwapPending || isWrapPending
   const canSwap = isConnected && !!fromToken && !!toToken && fromAmountNum > 0 &&
     !hasInsufficientBalance && !hasNoPool && !hasInsufficientLiquidity &&
     !isLoading && (isWrapUnwrap || !!trade)
@@ -195,11 +201,12 @@ export function SwapWidget({
     if (isApprovalPending) return "Waiting..."
     if (needsApproval) return `Approve ${fromToken?.symbol}`
     if (isSwapping || isWrapPending) return "Confirming..."
+    if (isSwapPending) return "Confirming..."
     if (quoteLoading) return "Getting Quote..."
     if (isWrapUnwrap) return fromToken?.symbol === "PHRS" ? "Wrap" : "Unwrap"
     return isHighImpact ? "Swap Anyway" : "Swap"
   }, [isConnected, fromAmount, fromAmountNum, hasInsufficientBalance, hasNoPool, hasInsufficientLiquidity,
-      isApproving, isApprovalPending, needsApproval, isSwapping, isWrapPending, quoteLoading, isWrapUnwrap,
+      isApproving, isApprovalPending, needsApproval, isSwapping, isSwapPending, isWrapPending, quoteLoading, isWrapUnwrap,
       fromToken, isHighImpact])
 
   const handleSwap = async () => {
@@ -289,31 +296,36 @@ export function SwapWidget({
   return (
     <div className={cn("flex flex-col gap-3 w-full", className)}>
 
-      {/* ── Row 1: Wallet connect + Settings ─────────────────────────── */}
+      {/* ── Row 1: Wallet connect (independent mode only) + Settings ──── */}
       <div className="flex items-center justify-between gap-2">
-        {/* Connect / address pill */}
-        <ConnectButton.Custom>
-          {({ account, openConnectModal, openAccountModal }) => (
-            account ? (
-              <button type="button" onClick={openAccountModal}
-                className="flex items-center gap-2 rounded-2xl px-3 py-1.5 text-xs font-medium transition-all hover:opacity-80 cursor-pointer"
-                style={{ background: "var(--zt-primary-15)", color: "var(--zt-primary)", border: "1px solid var(--zt-primary-30)" }}>
-                <span className="w-2 h-2 rounded-full" style={{ background: "var(--zt-success)" }} />
-                {account.displayName}
-              </button>
-            ) : (
-              <button type="button" onClick={openConnectModal}
-                className="rounded-2xl px-4 py-1.5 text-xs font-semibold transition-all hover:opacity-90 active:scale-95 cursor-pointer"
-                style={{ background: "var(--zt-primary-gradient)", color: "var(--zt-btn-text)" }}>
-                Connect
-              </button>
-            )
-          )}
-        </ConnectButton.Custom>
+        {/* Connect / address pill — only shown when terminal owns its own wallet */}
+        {isIndependent && (
+          <ConnectButton.Custom>
+            {({ account, openConnectModal, openAccountModal }) => (
+              account ? (
+                <button type="button" onClick={openAccountModal}
+                  className="flex items-center gap-2 rounded-xl px-3 py-1.5 text-xs font-medium transition-all hover:text-white cursor-pointer"
+                  style={{ background: "rgba(29, 37, 56, 0.8)", color: "var(--zt-primary)", border: "1px solid var(--zt-border)" }}>
+                  <span className="w-2 h-2 rounded-full" style={{ background: "var(--zt-success)" }} />
+                  {account.displayName}
+                </button>
+              ) : (
+                <button type="button" onClick={openConnectModal}
+                  className="rounded-xl px-4 py-1.5 text-xs font-semibold transition-all hover:text-white active:scale-95 cursor-pointer"
+                  style={{ background: "rgba(29, 37, 56, 0.8)", color: "var(--zt-primary)", border: "1px solid var(--zt-border)" }}>
+                  Connect
+                </button>
+              )
+            )}
+          </ConnectButton.Custom>
+        )}
 
-        {/* Settings icon */}
+        {/* Settings icon — always visible, fills row when wallet pill is hidden */}
         <button type="button" onClick={() => setView("settings")}
-          className="flex items-center justify-center w-8 h-8 rounded-full transition-all hover:opacity-70 cursor-pointer"
+          className={cn(
+            "flex items-center justify-center w-8 h-8 rounded-full transition-all hover:opacity-70 cursor-pointer",
+            !isIndependent && "ml-auto"
+          )}
           style={{ background: "var(--zt-text-8)", border: "1px solid var(--zt-border)", color: "var(--zt-text-50)" }}>
           <Settings className="w-3.5 h-3.5" />
         </button>
@@ -445,15 +457,26 @@ export function SwapWidget({
 
       {/* ── CTA ──────────────────────────────────────────────────────── */}
       {!isConnected ? (
-        <ConnectButton.Custom>
-          {({ openConnectModal }) => (
-            <button type="button" onClick={openConnectModal}
-              className="w-full h-12 rounded-2xl font-semibold text-sm transition-all hover:opacity-90 active:scale-[0.99] cursor-pointer"
-              style={{ background: "var(--zt-primary-gradient)", color: "var(--zt-btn-text)" }}>
-              Connect Wallet
-            </button>
-          )}
-        </ConnectButton.Custom>
+        isIndependent ? (
+          // Independent mode — terminal owns the connect flow, use RainbowKit modal
+          <ConnectButton.Custom>
+            {({ openConnectModal }) => (
+              <button type="button" onClick={openConnectModal}
+                className="w-full h-12 rounded-xl font-semibold text-sm transition-all hover:text-white active:scale-[0.99] cursor-pointer"
+                style={{ background: "rgba(29, 37, 56, 0.8)", color: "var(--zt-primary)", border: "1px solid var(--zt-border)" }}>
+                Connect Wallet
+              </button>
+            )}
+          </ConnectButton.Custom>
+        ) : (
+          // Hosted mode — host dApp owns wallet connection, don't touch RainbowKit context
+          // Show a passive prompt; the user connects via the host app's own button
+          <button type="button" disabled
+            className="w-full h-12 rounded-xl font-semibold text-sm cursor-not-allowed opacity-50"
+            style={{ background: "var(--zt-text-8)", color: "var(--zt-text-40)", border: "1px solid var(--zt-border)" }}>
+            Connect Wallet
+          </button>
+        )
       ) : (
         <button type="button" onClick={handleSwap}
           disabled={isLoading || (fromAmountNum > 0 && (hasInsufficientBalance || hasNoPool || hasInsufficientLiquidity || (!isWrapUnwrap && !trade && !quoteLoading)))}
